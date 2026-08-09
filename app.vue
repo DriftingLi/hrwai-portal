@@ -1,0 +1,98 @@
+<template>
+  <div class="portal-layout">
+    <PortalNavbar :menu-items="portalNav" />
+    <main class="portal-main">
+      <NuxtPage />
+    </main>
+    <PortalFooter />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { watch } from 'vue'
+import { portalNav } from '~/config/portalNav'
+import { useSiteLinks } from '~/composables/useSiteLinks'
+
+const config = useRuntimeConfig()
+const siteBase = config.public.siteUrl as string
+const baiduVerification = config.public.baiduVerification as string
+const { site } = useSiteLinks()
+
+// 跨页锚点滚动（导航/页脚 /#anchor 链接：整页跳转后滚到目标区块）
+const route = useRoute()
+watch(
+  () => route.hash,
+  (hash) => {
+    if (!hash) return
+    nextTick(() => {
+      setTimeout(() => {
+        document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    })
+  },
+  { immediate: true }
+)
+
+// 百度站长验证 meta（NUXT_PUBLIC_BAIDU_VERIFICATION 配置后输出）
+if (baiduVerification) {
+  useHead({
+    meta: [{ name: 'baidu-site-verification', content: baiduVerification }]
+  })
+}
+
+// 全站默认 head（页面级 useSeoMeta 覆盖标题/描述）
+useHead({
+  htmlAttrs: { lang: 'zh-CN' },
+  titleTemplate: (title) => (title ? `${title} - 和润天下` : '和润天下人工智能科技有限公司'),
+  meta: [
+    { name: 'viewport', content: 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes' },
+    { name: 'format-detection', content: 'telephone=no' },
+    { name: 'description', content: '和润天下人工智能科技有限公司 — 深耕叉车行业，提供叉车维修培训、残值智能评估、二手叉车交易撮合与 AI 叉车助手等一站式人工智能解决方案。' }
+  ]
+})
+
+// canonical + Organization 结构化数据：仅在配置了站点地址后输出绝对 URL
+if (siteBase) {
+  const organizationJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: '和润天下人工智能科技有限公司',
+    url: site('/'),
+    logo: site('/images/HRWAIlogo.jpg'),
+    description: '深耕叉车行业，以 AI 技术驱动产业智能化升级。'
+  }
+  useHead({
+    link: [{ rel: 'canonical', href: site('/') }],
+    script: [
+      {
+        children: JSON.stringify(organizationJsonLd),
+        type: 'application/ld+json'
+      } as any
+    ]
+  })
+}
+
+// Google Fonts（与现网一致：DM Sans + Noto Sans SC + JetBrains Mono）
+useHead({
+  link: [
+    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+    {
+      rel: 'stylesheet',
+      href: 'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap'
+    }
+  ]
+})
+</script>
+
+<style scoped>
+.portal-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-page);
+}
+.portal-main {
+  flex: 1;
+}
+</style>
