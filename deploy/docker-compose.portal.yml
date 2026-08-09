@@ -1,0 +1,19 @@
+# ===== 官网门户部署编排（服务器端，由 CI 部署脚本生成 .env 后使用） =====
+services:
+  portal:
+    image: ${PORTAL_IMAGE}
+    container_name: hrwai-portal
+    restart: unless-stopped
+    environment:
+      # SSR 直连后端内部地址（host 网络下后端在 127.0.0.1:8080）
+      NUXT_API_INTERNAL_BASE: ${NUXT_API_INTERNAL_BASE}
+      PORTAL_SITE_URL: ${PORTAL_SITE_URL}
+      NUXT_PUBLIC_BAIDU_VERIFICATION: ${NUXT_PUBLIC_BAIDU_VERIFICATION}
+    ports:
+      # 仅回环暴露，由宿主 nginx（forklift-frontend-prod）按 Host 分流或 SSH 隧道访问
+      - "127.0.0.1:3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

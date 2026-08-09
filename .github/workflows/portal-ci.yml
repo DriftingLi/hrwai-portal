@@ -1,10 +1,11 @@
-# ===== 官网门户 CI（独立仓库） =====
-# 构建 + 镜像推送 + 部署。
-# 使用前需配置以下 Secrets：
-#   DOCKER_REGISTRY / DOCKER_USERNAME / DOCKER_PASSWORD — 镜像仓库
-#   SERVER_HOST / SERVER_SSH_KEY — 部署目标服务器（如需要）
-#   NUXT_API_INTERNAL_BASE / PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION — 构建期配置
-# 注意：站点地址用 PORTAL_SITE_URL（www 归一化在构建期完成；PORTAL_SITE_URL 会绕过）
+# ===== 官网门户 CI/CD =====
+# check/build: push/PR 自动执行；deploy: workflow_dispatch 手动触发（按环境）
+# 使用前需配置的 Secrets / Variables（详见 README「部署」）：
+#   仓库级 Secrets: SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY / PORTAL_SITE_URL
+#                  NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
+#   环境级 Secrets (production / testing): SSH_JUMP_HOST / NUXT_API_INTERNAL_BASE
+#   环境级 Variables: ENABLE_NGINX_REDIRECT(production=true / testing=false)
+#   仓库级 Variables: REGISTRY_PROXY=127.0.0.1:5000 / KEEP_IMAGES=3
 name: portal-ci
 
 on:
@@ -12,8 +13,34 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 部署的 commit SHA（留空用 main 分支 HEAD）
+        type: string
+        default: ""
+      environment:
+        description: 部署目标环境
+        type: choice
+        default: production
+        options:
+          - production
+          - testing
+
+concurrency:
+  # 同一环境同时只允许一条部署
+  group: portal-${{ github.event.inputs.environment || 'build' }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PORTAL: ghcr.io/${{ github.repository }}
+  DEPLOY_PATH: /opt/hrwai-portal
 
 jobs:
+  # ============================================================
+  # Stage 1: 检查（typecheck + test + build）
+  # ============================================================
   check:
     runs-on: ubuntu-latest
     steps:
@@ -34,45 +61,154 @@ jobs:
         run: npm test
 
       - name: Build
-        # 后端公开接口需在构建期可达（预渲染首页 + sitemap 全量文章）
+        # 后端公开接口需在构建期可达（预渲染首页 + sitemap 全量文章）；
         # 不可达时构建不失败，仅精选内容降级为空（见页面实现）
         run: npm run build
         env:
-          NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
           PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
           NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
 
-  # ===== 镜像构建与部署（main 分支）=====
-  # TODO(部署): 按实际环境填写以下步骤，或改用自有部署流程
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # ============================================================
+  # Stage 2: 构建镜像并推送 ghcr.io
+  # ============================================================
+  build:
     needs: check
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ github.event.inputs.ref || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
-      - name: Login to registry
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PORTAL }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=,format=short
+            type=raw,value=${{ github.event.inputs.ref || github.sha }}
+            type=ref,event=branch
+
+      - name: 构建并推送门户镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PORTAL_SITE_URL=${{ secrets.PORTAL_SITE_URL }}
+            NUXT_PUBLIC_BAIDU_VERIFICATION=${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
+          provenance: false
+
+  # ============================================================
+  # Stage 3: 通过公网 SSH（ProxyJump pve → LXC）部署
+  # ============================================================
+  deploy:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'production' }}
+    env:
+      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
+      KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
+      # 运行期配置（环境级 Secrets）
+      NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
+      PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
+      NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
+      # 是否注入 www 分流（production=true，testing=false）
+      ENABLE_NGINX_REDIRECT: ${{ vars.ENABLE_NGINX_REDIRECT || 'false' }}
+      # SSH 连接（公网 pve 跳板 + LXC 目标）
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.image_tag }}
+
+      # --------------------------------------------------------
+      # Step 3.1: 配置 SSH（跳板模式：CI → pve 公网 → LXC 内网）
+      # --------------------------------------------------------
+      - name: 配置 SSH
         run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ secrets.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          if [ -n "$SSH_JUMP_HOST" ]; then
+            cat > ~/.ssh/config << EOF
+          Host jump
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
 
-      - name: Build and push image
+          Host target
+              HostName $SSH_JUMP_HOST
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              ProxyJump jump
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+          else
+            cat > ~/.ssh/config << EOF
+          Host target
+              HostName $SSH_HOST
+              Port $SSH_PORT
+              User $SSH_USER
+              IdentityFile ~/.ssh/deploy_key
+              StrictHostKeyChecking no
+          EOF
+            echo "SSH_TARGET=target" >> $GITHUB_ENV
+          fi
+
+      # --------------------------------------------------------
+      # Step 3.2: 上传部署文件并执行
+      # --------------------------------------------------------
+      - name: 上传部署文件
         run: |
-          docker build \
-            --build-arg NUXT_API_INTERNAL_BASE="${{ secrets.NUXT_API_INTERNAL_BASE }}" \
-            --build-arg PORTAL_SITE_URL="${{ secrets.PORTAL_SITE_URL }}" \
-            --build-arg NUXT_PUBLIC_BAIDU_VERIFICATION="${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}" \
-            -t ${{ secrets.DOCKER_REGISTRY }}/hrwai-portal:${{ github.sha }} \
-            -t ${{ secrets.DOCKER_REGISTRY }}/hrwai-portal:latest \
-            .
-          docker push ${{ secrets.DOCKER_REGISTRY }}/hrwai-portal:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_REGISTRY }}/hrwai-portal:latest
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "$SSH_TARGET" "mkdir -p $DEPLOY_PATH/deploy"
+          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            deploy/deploy-portal.sh deploy/docker-compose.portal.yml deploy/portal.nginx.split.conf \
+            "$SSH_TARGET:$DEPLOY_PATH/deploy/"
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "$SSH_TARGET" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
 
-      # TODO(部署): 服务器侧更新流程（SSH pull & restart 或 compose 滚动更新）
-      # - name: Deploy to server
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host: ${{ secrets.SERVER_HOST }}
-      #     key: ${{ secrets.SERVER_SSH_KEY }}
-      #     script: |
-      #       docker pull ${{ secrets.DOCKER_REGISTRY }}/hrwai-portal:latest
-      #       docker compose -f /opt/hrwai-portal/docker-compose.yml up -d --force-recreate portal
+      - name: 执行远程部署
+        run: |
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "$SSH_TARGET" \
+            "cd $DEPLOY_PATH && env \
+              IMAGE=ghcr.io/${{ github.repository }} \
+              IMAGE_TAG=$IMAGE_TAG \
+              GITHUB_TOKEN=$GITHUB_TOKEN \
+              REGISTRY_PROXY=$REGISTRY_PROXY \
+              KEEP_IMAGES=$KEEP_IMAGES \
+              NUXT_API_INTERNAL_BASE=$NUXT_API_INTERNAL_BASE \
+              PORTAL_SITE_URL=$PORTAL_SITE_URL \
+              NUXT_PUBLIC_BAIDU_VERIFICATION=$NUXT_PUBLIC_BAIDU_VERIFICATION \
+              ENABLE_NGINX_REDIRECT=$ENABLE_NGINX_REDIRECT \
+              bash deploy/deploy-portal.sh"

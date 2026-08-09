@@ -50,7 +50,26 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 
 - `Dockerfile`：node:22 多阶段，运行期可用 `-e NUXT_API_INTERNAL_BASE=...` 覆盖后端地址
 - `nginx.conf.template`：可选的多站点宿主机入口（整站转发到 portal 容器；`/api` 与 `/static` 由 Nitro 内部代理，无需单独反代）
-- `.github/workflows/portal-ci.yml`：typecheck + test + build + 镜像推送（部署步骤留占位）
+- `.github/workflows/portal-ci.yml`：CI/CD——push/PR 自动 typecheck + test + build；`workflow_dispatch` 手动触发部署（按环境）
+
+### CI/CD 部署（ghcr.io + 服务器）
+
+镜像推送到 `ghcr.io/<org>/hrwai-portal`，服务器经本地 `ghcr-proxy`（127.0.0.1:5000 pull-through 缓存）拉取；www 由 `forklift-frontend-prod` 的 nginx（host 网络 51820）按 Host 头分流到 portal 容器（127.0.0.1:3000），`/api` 与 `/static` 由 Nitro 内部代理到后端。
+
+需要配置的 Secrets / Variables：
+
+| 级别 | 名称 | 说明 |
+| --- | --- | --- |
+| 仓库 Secrets | `SSH_HOST` / `SSH_PORT` / `SSH_USER` / `SSH_PRIVATE_KEY` | SSH 跳板（pve 公网，如 `183.36.195.104:2222` root） |
+| 环境 Secrets | `SSH_JUMP_HOST` | LXC 内网 IP（production `172.17.1.201` / testing `172.17.1.200`） |
+| 环境 Secrets | `NUXT_API_INTERNAL_BASE` | SSR 后端地址（host 网络下 `http://127.0.0.1:8080`） |
+| 仓库 Secrets | `PORTAL_SITE_URL` | www 站点地址（如 `https://www.gccsmile.com`；裸域自动补 www） |
+| 仓库 Secrets | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 可选，百度验证码 |
+| 仓库 Variables | `REGISTRY_PROXY` | `127.0.0.1:5000` |
+| 仓库 Variables | `KEEP_IMAGES` | 旧镜像保留数，默认 3 |
+| 环境 Variables | `ENABLE_NGINX_REDIRECT` | production `true`（注入 www 分流）/ testing `false` |
+
+触发部署：`gh workflow run portal-ci.yml -f environment=production -f ref=<sha>`（GitHub Actions → workflow_dispatch 选择环境）。
 
 ## 页面与路由
 
