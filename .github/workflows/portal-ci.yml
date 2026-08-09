@@ -134,11 +134,12 @@ jobs:
       NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
       # 是否注入 www 分流（production=true，testing=false）
       ENABLE_NGINX_REDIRECT: ${{ vars.ENABLE_NGINX_REDIRECT || 'false' }}
-      # SSH 连接（公网 pve 跳板 + LXC 目标）
+      # SSH 连接（公网 pve 跳板 + LXC 目标；跳板与 LXC 各需独立密钥）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_TARGET_KEY: ${{ secrets.SSH_TARGET_KEY }}
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -154,6 +155,14 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # LXC 目标密钥（与 pve 跳板密钥不同：pve-02 认 pve-02.pem，LXC 认 forklift-lxc）
+          if [ -n "$SSH_TARGET_KEY" ]; then
+            echo "$SSH_TARGET_KEY" > ~/.ssh/target_key
+            chmod 600 ~/.ssh/target_key
+            TARGET_IDENTITY="IdentityFile ~/.ssh/target_key"
+          else
+            TARGET_IDENTITY="IdentityFile ~/.ssh/deploy_key"
+          fi
           ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           if [ -n "$SSH_JUMP_HOST" ]; then
             cat > ~/.ssh/config << EOF
@@ -167,7 +176,7 @@ jobs:
           Host target
               HostName $SSH_JUMP_HOST
               User $SSH_USER
-              IdentityFile ~/.ssh/deploy_key
+              $TARGET_IDENTITY
               ProxyJump jump
               StrictHostKeyChecking no
           EOF
@@ -178,7 +187,7 @@ jobs:
               HostName $SSH_HOST
               Port $SSH_PORT
               User $SSH_USER
-              IdentityFile ~/.ssh/deploy_key
+              $TARGET_IDENTITY
               StrictHostKeyChecking no
           EOF
             echo "SSH_TARGET=target" >> $GITHUB_ENV
