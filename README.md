@@ -50,7 +50,7 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 
 - `Dockerfile`：node:22 多阶段，运行期可用 `-e NUXT_API_INTERNAL_BASE=...` 覆盖后端地址
 - `nginx.conf.template`：可选的多站点宿主机入口（整站转发到 portal 容器；`/api` 与 `/static` 由 Nitro 内部代理，无需单独反代）
-- `.github/workflows/portal-ci.yml`：CI/CD——push/PR 自动 typecheck + test + build；`workflow_dispatch` 手动触发部署（按环境）
+- `.github/workflows/portal-ci.yml`：CI/CD——任意分支 push 自动 check + build + 部署 **testing**（验证通过后 PR 进 main）；PR 进 main 跑 check（分支保护要求）；main push（PR 合并）自动部署 **production**；`workflow_dispatch` 可手动指定环境/ref
 
 ### CI/CD 部署（ghcr.io + 服务器）
 

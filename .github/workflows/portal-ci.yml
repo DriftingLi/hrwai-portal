@@ -1,22 +1,26 @@
 # ===== 官网门户 CI/CD =====
-# check/build: push/PR 自动执行；deploy: workflow_dispatch 手动触发（按环境）
+# 触发策略：
+#   - 任意分支 push        → check + build + 自动部署 testing（验证通过后 PR 进 main）
+#   - PR 进 main            → check（分支保护要求）
+#   - main push（PR 合并后）→ check + build + 自动部署 production
+#   - workflow_dispatch    → 手动部署（可指定 environment / ref）
 # 使用前需配置的 Secrets / Variables（详见 README「部署」）：
-#   仓库级 Secrets: SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY / PORTAL_SITE_URL
-#                  NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
+#   仓库级 Secrets: SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY / SSH_TARGET_KEY
+#                  PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
 #   环境级 Secrets (production / testing): SSH_JUMP_HOST / NUXT_API_INTERNAL_BASE
-#   环境级 Variables: ENABLE_NGINX_REDIRECT(production=true / testing=false)
+#   环境级 Variables (production / testing): ENABLE_NGINX_REDIRECT
 #   仓库级 Variables: REGISTRY_PROXY=127.0.0.1:5000 / KEEP_IMAGES=3
 name: portal-ci
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       ref:
-        description: 部署的 commit SHA（留空用 main 分支 HEAD）
+        description: 部署的 commit SHA（留空用分支 HEAD）
         type: string
         default: ""
       environment:
@@ -28,8 +32,8 @@ on:
           - testing
 
 concurrency:
-  # 同一环境同时只允许一条部署
-  group: portal-${{ github.event.inputs.environment || 'build' }}
+  # 同一环境同时只允许一条部署；按实际目标环境分组（push 时无 inputs）
+  group: portal-${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.environment || 'production') || (github.ref == 'refs/heads/main' && 'production' || 'testing') }}
   cancel-in-progress: false
 
 env:
@@ -39,7 +43,7 @@ env:
 
 jobs:
   # ============================================================
-  # Stage 1: 检查（typecheck + test + build）
+  # Stage 1: 检查（typecheck + test + build）——分支保护要求的 status check
   # ============================================================
   check:
     runs-on: ubuntu-latest
@@ -69,7 +73,7 @@ jobs:
           NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
 
   # ============================================================
-  # Stage 2: 构建镜像并推送 ghcr.io
+  # Stage 2: 构建镜像并推送 ghcr.io（PR 不构建）
   # ============================================================
   build:
     needs: check
@@ -117,22 +121,23 @@ jobs:
 
   # ============================================================
   # Stage 3: 通过公网 SSH（ProxyJump pve → LXC）部署
+  #   分支 push → testing；main push → production；手动 → 指定环境
   # ============================================================
   deploy:
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.environment || 'production' }}
+      name: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.environment || 'production') || (github.ref == 'refs/heads/main' && 'production' || 'testing') }}
     env:
       IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
       REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
       KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
-      # 运行期配置（环境级 Secrets）
+      # 运行期配置（环境级 Secrets 按 environment 自动解析）
       NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
       PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
       NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
-      # 是否注入 www 分流（production=true，testing=false）
+      # 是否注入 www 分流（环境级 Variables）
       ENABLE_NGINX_REDIRECT: ${{ vars.ENABLE_NGINX_REDIRECT || 'false' }}
       # SSH 连接（公网 pve 跳板 + LXC 目标；跳板与 LXC 各需独立密钥）
       SSH_HOST: ${{ secrets.SSH_HOST }}
