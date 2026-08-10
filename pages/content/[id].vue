@@ -202,6 +202,7 @@ useHead({
   padding: 120px 0 80px;
   background: var(--color-bg-page, #f8fafc);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .content-detail-page .container {

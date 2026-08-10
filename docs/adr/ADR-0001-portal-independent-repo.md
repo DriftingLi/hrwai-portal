@@ -10,7 +10,7 @@
 ## Decision
 
 1. **独立仓库**：官网门户为独立 Nuxt 4 应用，独占 www 子域名；与 Vue SPA 工作区（training./valuation./mentor./manage.）解耦。开发期在 monorepo 内 `portal/` 文件夹（gitignored）进行，完成后发布为独立 GitHub 仓库。
-2. **混合渲染**：`/` 与 `/dispatch` 构建时预渲染（内容基本静态）；`/content/**` 与 `/news` SSR + SWR 定时重新验证（600s / 60s）。**不引入发布 webhook**——后台发布后最多一个周期自动生效；如将来需要，Nitro `revalidate` API 已预留。
+2. **混合渲染**：`/` 构建时预渲染；`/content/**` 与 `/news` SSR + SWR 定时重新验证（600s / 60s）。**不引入发布 webhook**——后台发布后最多一个周期自动生效；如将来需要，Nitro `revalidate` API 已预留。
 3. **数据通路**：SSR 直连后端内网地址（`NUXT_API_INTERNAL_BASE`，与 sitemap 数据源同模式）；浏览器同源 `/api`、`/static` 经 Nitro 代理中间件转发，无 CORS。
 4. **阅读量语义拆分**：详情接口带 `no_view=1`（SSR/爬虫路径）不计阅读量；新增客户端计数端点 `POST /api/featured-content/:id/view`，真实浏览器 hydration 后调用。「阅读量」从此定义为真实用户视角计数，与「详情请求次数」区分（见 CONTEXT.md）。
 5. **URL 保持**：`/content/:id` 路径与现网一致，已收录链接不失效；新增 `/news`、`/news/[category]` 归档页消除孤儿内容。

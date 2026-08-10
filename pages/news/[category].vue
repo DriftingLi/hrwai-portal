@@ -62,6 +62,7 @@ useHead({
   background: var(--color-bg-page);
   padding: 120px 0 80px;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 .container {
   max-width: var(--container-page);
