@@ -8,7 +8,6 @@
 #   仓库级 Secrets: SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY / SSH_TARGET_KEY
 #                  PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
 #   环境级 Secrets (production / testing): SSH_JUMP_HOST / NUXT_API_INTERNAL_BASE
-#   环境级 Variables (production / testing): ENABLE_NGINX_REDIRECT
 #   仓库级 Variables: REGISTRY_PROXY=127.0.0.1:5000 / KEEP_IMAGES=3
 name: portal-ci
 
@@ -137,8 +136,6 @@ jobs:
       NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
       PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
       NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
-      # 是否注入 www 分流（环境级 Variables）
-      ENABLE_NGINX_REDIRECT: ${{ vars.ENABLE_NGINX_REDIRECT || 'false' }}
       # SSH 连接（公网 pve 跳板 + LXC 目标；跳板与 LXC 各需独立密钥）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
@@ -224,5 +221,4 @@ jobs:
               NUXT_API_INTERNAL_BASE=$NUXT_API_INTERNAL_BASE \
               PORTAL_SITE_URL=$PORTAL_SITE_URL \
               NUXT_PUBLIC_BAIDU_VERIFICATION=$NUXT_PUBLIC_BAIDU_VERIFICATION \
-              ENABLE_NGINX_REDIRECT=$ENABLE_NGINX_REDIRECT \
               bash deploy/deploy-portal.sh"
