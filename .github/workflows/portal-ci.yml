@@ -206,7 +206,7 @@ jobs:
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "$SSH_TARGET" "mkdir -p $DEPLOY_PATH/deploy"
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            deploy/deploy-portal.sh deploy/docker-compose.portal.yml deploy/portal.nginx.split.conf \
+            deploy/deploy-portal.sh deploy/docker-compose.portal.yml \
             "$SSH_TARGET:$DEPLOY_PATH/deploy/"
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             "$SSH_TARGET" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
