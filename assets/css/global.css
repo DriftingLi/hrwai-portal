@@ -4,6 +4,22 @@
   box-sizing: border-box;
 }
 
+/* 页面级禁止横向溢出（官网为营销页，无横向滚动需求）：
+   防止移动端因 subpixel/固定定位/长内容产生横向滚动条 */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* 长内容（URL/代码/英文串）不撑破容器 */
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
 body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
