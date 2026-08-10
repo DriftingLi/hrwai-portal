@@ -1353,6 +1353,15 @@ function resumeFeaturedAutoplay() {
   }
   .stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* 移动端 3 列空间紧张：压缩间距与卡片内边距 */
+    gap: var(--space-3);
+  }
+  .stat-card {
+    padding: var(--space-3) var(--space-2);
+  }
+  /* 数字 36px 在窄列中会溢出卡片（"20+" 宽约 65px），移动端降为 24px */
+  .stat-number {
+    font-size: 1.5rem;
   }
   .hero-content {
     padding: var(--space-32) var(--space-4) var(--space-12);
