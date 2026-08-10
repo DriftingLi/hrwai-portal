@@ -61,5 +61,15 @@ export default defineNuxtConfig({
   // ===== 类型检查 =====
   typescript: {
     strict: true
+  },
+
+  // ===== 构建 =====
+  vite: {
+    build: {
+      // rolldown-vite 用 lightningcss 压缩 CSS，会把 max-width: 767px 编译成 range 语法
+      // (width<=767px)——旧浏览器/WebView（Chrome<104、部分国产内核）不支持 →
+      // 媒体查询全部失效（移动端完全不适配）。关闭 CSS 压缩，保留传统 max-width 语法。
+      cssMinify: false
+    }
   }
 })

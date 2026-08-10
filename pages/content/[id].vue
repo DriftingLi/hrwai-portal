@@ -258,7 +258,7 @@ useHead({
 /* 主体网格 */
 .article-layout {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 32px;
   align-items: start;
 }
@@ -461,7 +461,7 @@ useHead({
   }
 
   .article-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .article-sidebar {

@@ -109,7 +109,7 @@ import { externalMallUrl } from '~/config/links'
 }
 .footer-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-12);
   padding-bottom: var(--space-12);
   border-bottom: 1px solid var(--color-border-darker);
@@ -219,7 +219,7 @@ import { externalMallUrl } from '~/config/links'
 
 .quick-links {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-3);
 }
 .quick-link {
@@ -255,7 +255,7 @@ import { externalMallUrl } from '~/config/links'
 
 @media (max-width: 768px) {
   .footer-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--space-6);
   }
   .footer-brand {
@@ -265,10 +265,10 @@ import { externalMallUrl } from '~/config/links'
 
 @media (max-width: 480px) {
   .footer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quick-links {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
