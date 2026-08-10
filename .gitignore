@@ -8,3 +8,9 @@ dist/
 .env.*.local
 coverage/
 *.log
+
+# ===== nginx 配置不纳入 git 控制 =====
+# 服务器 nginx 由 monorepo（nginx-host.conf）与本部署脚本（内联分流块）共同维护，
+# 配置文件不版本化，避免双源冲突；本地产物保留在工作区作参考
+nginx.conf.template
+deploy/portal.nginx.split.conf
