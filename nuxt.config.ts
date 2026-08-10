@@ -51,7 +51,6 @@ export default defineNuxtConfig({
   // ===== 混合渲染策略 =====
   routeRules: {
     '/': { prerender: true },
-    '/dispatch': { prerender: true },
     '/sitemap.xml': { prerender: true },
     '/robots.txt': { prerender: true },
     '/news': { swr: 60 },

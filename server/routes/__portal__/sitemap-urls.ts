@@ -16,7 +16,6 @@ interface FeaturedListData {
 
 const STATIC_URLS: SitemapUrl[] = [
   { loc: '/' },
-  { loc: '/dispatch' },
   { loc: '/news' },
   { loc: '/news/company' },
   { loc: '/news/industry' },

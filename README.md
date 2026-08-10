@@ -2,7 +2,7 @@
 
 独立 Nuxt 4 应用，承载 www 子域名官网（首页 / 内容精选归档 / 内容详情），面向访客与搜索引擎爬虫。
 
-- **SSR 混合渲染**：`/` 与 `/dispatch` 构建时预渲染；`/content/**` SWR 600s；`/news` SWR 60s（后台发布内容自动生效，无需 webhook）
+- **SSR 混合渲染**：`/` 构建时预渲染；`/content/**` SWR 600s；`/news` SWR 60s（后台发布内容自动生效，无需 webhook）
 - **SEO**：全量 SSR HTML、sitemap.xml（构建时含全部已发布文章）、robots.txt、JSON-LD（Organization / Article / BreadcrumbList）、OG/Twitter Card、canonical（www 固定版）、百度验证 meta（可配置）
 - **与其它模块解耦**：门户只读消费后端公开 API；功能入口（培训 / 残值评估 / AI 助手）整页跳转到对应子域名
 
@@ -78,7 +78,6 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 | `/` | 预渲染 | 官网首页（Hero/公司介绍/创始人/核心服务/合作模式/服务保障/内容精选轮播/CTA） |
 | `/content/[id]` | SSR + SWR 600s | 文章详情（Markdown 服务端渲染、上/下一篇、相关资讯）；不存在/未发布返回真实 404；阅读量由 hydration 后客户端端点计数（SSR/爬虫不计） |
 | `/news`、`/news/[category]` | SSR + SWR 60s | 内容精选归档页（全部 + 公司动态/行业新闻/产品资讯/资讯），分页 |
-| `/dispatch` | 预渲染 | 二手叉车交易「即将上线」占位页 |
 | `/sitemap.xml`、`/robots.txt` | 预渲染 | 构建时生成 |
 
 ## 目录结构
