@@ -54,7 +54,7 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 
 ### CI/CD 部署（ghcr.io + 服务器）
 
-镜像推送到 `ghcr.io/<org>/hrwai-portal`，服务器经本地 `ghcr-proxy`（127.0.0.1:5000 pull-through 缓存）拉取；www 由 `forklift-frontend-prod` 的 nginx（host 网络 51820）按 Host 头分流到 portal 容器（127.0.0.1:3000），`/api` 与 `/static` 由 Nitro 内部代理到后端。
+镜像推送到 `ghcr.io/<org>/hrwai-portal`，服务器经本地 `ghcr-proxy`（127.0.0.1:5000 pull-through 缓存）拉取；www 分流（含 ai-assistant/根域 301）由 monorepo `frontend/nginx-host.conf` 统一管理（nginx 配置不在此仓库版本化，避免双源冲突），`/api` 与 `/static` 由 Nitro 内部代理到后端。
 
 需要配置的 Secrets / Variables：
 
@@ -67,7 +67,6 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 | 仓库 Secrets | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 可选，百度验证码 |
 | 仓库 Variables | `REGISTRY_PROXY` | `127.0.0.1:5000` |
 | 仓库 Variables | `KEEP_IMAGES` | 旧镜像保留数，默认 3 |
-| 环境 Variables | `ENABLE_NGINX_REDIRECT` | production `true`（注入 www 分流）/ testing `false` |
 
 触发部署：`gh workflow run portal-ci.yml -f environment=production -f ref=<sha>`（GitHub Actions → workflow_dispatch 选择环境）。
 

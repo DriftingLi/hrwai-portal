@@ -28,9 +28,6 @@ KEEP_IMAGES="${KEEP_IMAGES:-3}"
 NUXT_API_INTERNAL_BASE="${NUXT_API_INTERNAL_BASE:-http://127.0.0.1:8080}"
 PORTAL_SITE_URL="${PORTAL_SITE_URL:-}"
 NUXT_PUBLIC_BAIDU_VERIFICATION="${NUXT_PUBLIC_BAIDU_VERIFICATION:-}"
-ENABLE_NGINX_REDIRECT="${ENABLE_NGINX_REDIRECT:-false}"
-FRONTEND_DEPLOY_PATH="${FRONTEND_DEPLOY_PATH:-/opt/forklift-training}"
-FRONTEND_CONTAINER="${FRONTEND_CONTAINER:-forklift-frontend-prod}"
 
 # 镜像加速代理（ghcr pull-through 缓存）
 IMAGE_ORIG="${IMAGE}:${IMAGE_TAG}"
@@ -122,63 +119,6 @@ for i in $(seq 1 15); do
 done
 [ "$HEALTH_OK" = "1" ] || log_error "门户健康检查失败（http://127.0.0.1:3000）"
 log_ok "门户健康检查通过"
-
-# ---- www 分流注入（production，host 网络 nginx） ----
-# nginx 配置内容内联于此（不再作为仓库文件版本化，避免与 monorepo 的
-# nginx-host.conf 产生双源冲突）；注入幂等：已存在则跳过。
-if [ "$ENABLE_NGINX_REDIRECT" = "true" ]; then
-    log_info "注入 www 分流到 ${FRONTEND_DEPLOY_PATH}/frontend/nginx-host.conf ..."
-    FRONTEND_CONF="${FRONTEND_DEPLOY_PATH}/frontend/nginx-host.conf"
-    if [ -f "$FRONTEND_CONF" ]; then
-        if ! grep -q "PORTAL NGINX SPLIT BEGIN" "$FRONTEND_CONF"; then
-            # 直接 append server 块到 nginx 模板（容器重启时 envsubst 后成为 default.conf 一部分；
-            # 不用 include——conf.d 仅挂载了模板单文件，include 路径在容器内不存在）
-            # 引号定界 heredoc：$scheme/$server_port 等 nginx 变量原样保留
-            cat >> "$FRONTEND_CONF" << 'PORTAL_NGINX_SPLIT_EOF'
-
-# ===== PORTAL NGINX SPLIT BEGIN =====
-server {
-    listen 51820;
-    # www 子域名（任意根域）进门户；其余子域名走 default_server（原 SPA）
-    server_name ~^www\..+$;
-
-    # AI 助手已迁移至 training 子域名（ADR-0001）：旧 www 地址 301
-    location = /ai-assistant {
-        return 301 $scheme://training.gccsmile.com:$server_port/ai-assistant;
-    }
-
-    # 整站转发到门户 Nitro（/api 与 /static 由 Nitro 内部代理到后端）
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120s;
-        proxy_send_timeout 120s;
-    }
-}
-
-# 根域名（不带 www）301 到 www 固定版
-server {
-    listen 51820;
-    server_name gccsmile.com;
-    return 301 $scheme://www.gccsmile.com:$server_port$request_uri;
-}
-# ===== PORTAL NGINX SPLIT END =====
-PORTAL_NGINX_SPLIT_EOF
-            log_info "已追加分流配置，重启 ${FRONTEND_CONTAINER}"
-            docker restart "$FRONTEND_CONTAINER" >/dev/null 2>&1 || log_error "frontend 容器重启失败"
-        else
-            log_ok "分流配置已存在，跳过"
-        fi
-    else
-        log_warn "未找到 ${FRONTEND_CONF}，跳过分流注入（测试环境无 nginx 属预期）"
-    fi
-fi
 
 # ---- 清理旧镜像 ----
 if [ "$KEEP_IMAGES" -gt 0 ]; then
