@@ -21,6 +21,24 @@ describe('buildSubdomainUrl', () => {
     expect(buildSubdomainUrl('training', '/', '')).toBe('/')
     expect(buildSubdomainUrl('valuation', '/x', '')).toBe('/x')
   })
+
+  it('协议覆盖：客户端跳转以当前页协议为准（生产 https 适配）', () => {
+    // 站点配置为 http、当前页 https → 跳转 https（生产切 https 后的主场景）
+    expect(buildSubdomainUrl('training', '/', 'http://www.example.com', 'https:')).toBe(
+      'https://training.example.com/'
+    )
+    expect(buildSubdomainUrl('valuation', '/history', 'http://example.com', 'https:')).toBe(
+      'https://valuation.example.com/history'
+    )
+    // 站点配置为 https、当前页 http（本地直连 http 调试）→ 跳转 http
+    expect(buildSubdomainUrl('training', '/', 'https://www.example.com', 'http:')).toBe(
+      'http://training.example.com/'
+    )
+  })
+
+  it('协议覆盖在未配置站点地址时仍回退为相对路径', () => {
+    expect(buildSubdomainUrl('training', '/', '', 'https:')).toBe('/')
+  })
 })
 
 describe('buildSiteUrl', () => {

@@ -4,7 +4,7 @@
 
 - **SSR 混合渲染**：`/` 构建时预渲染；`/content/**` SWR 600s；`/news` SWR 60s（后台发布内容自动生效，无需 webhook）
 - **SEO**：全量 SSR HTML、sitemap.xml（构建时含全部已发布文章）、robots.txt、JSON-LD（Organization / Article / BreadcrumbList）、OG/Twitter Card、canonical（www 固定版）、百度验证 meta（可配置）
-- **与其它模块解耦**：门户只读消费后端公开 API；功能入口（培训 / 残值评估 / AI 助手）整页跳转到对应子域名
+- **与其它模块解耦**：门户只读消费后端公开 API；功能入口（培训 / 残值评估 / AI 助手）整页跳转到对应子域名（跳转协议跟随访问者当前页协议——生产 HTTPS 下自动使用 https 子域，不依赖构建期 PORTAL_SITE_URL 的协议值）
 
 ## 技术栈
 
