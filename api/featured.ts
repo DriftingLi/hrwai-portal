@@ -7,7 +7,7 @@ export const featuredCategoryLabels: Record<string, string> = {
   company: '公司动态',
   industry: '行业新闻',
   product: '产品资讯',
-  news: '资讯'
+  news: '政策法规'
 }
 
 /** 分类 key 列表（归档页路由 /news/[category] 用） */
@@ -19,9 +19,10 @@ export const featuredCategoryOptions = featuredCategoryKeys.map((key) => ({
   label: featuredCategoryLabels[key]
 }))
 
-/** 分类中文标签（未知分类回退「资讯」） */
+/** 分类中文标签（未知分类回退「政策法规」，兼容旧 news 别名） */
 export function categoryLabel(category: string): string {
-  return featuredCategoryLabels[category] || '资讯'
+  if (category === 'news') return '政策法规'
+  return featuredCategoryLabels[category] || '政策法规'
 }
 
 /** 列表项（不含 content 正文，与后端 featuredToListDict 口径一致） */
@@ -62,6 +63,7 @@ export interface FeaturedListParams {
   page?: number
   page_size?: number
   category?: string
+  sort?: 'latest' | 'hot'
 }
 
 /** 后端统一响应包装：{ code, message, data } */
