@@ -2,6 +2,11 @@
   <div class="news-archive">
     <NewsTabs :active-key="activeKey" />
 
+    <div class="sort-tabs">
+      <NuxtLink :to="sortUrl('latest')" class="sort-tab" :class="{ active: sort === 'latest' }">最新资讯</NuxtLink>
+      <NuxtLink :to="sortUrl('hot')" class="sort-tab" :class="{ active: sort === 'hot' }">热点资讯</NuxtLink>
+    </div>
+
     <div v-if="list.items.length" class="news-grid">
       <NewsCard v-for="item in list.items" :key="item.content_id" :item="item" />
     </div>
@@ -30,13 +35,18 @@ const page = computed(() => {
   const p = Number(route.query.page)
   return Number.isInteger(p) && p > 0 ? p : 1
 })
+const sort = computed(() => {
+  const s = route.query.sort as string
+  return s === 'hot' ? 'hot' : 'latest'
+})
 
 const { data: list } = await useAsyncData(
-  `news-list-${activeKey.value}-${page.value}`,
+  `news-list-${activeKey.value}-${page.value}-${sort.value}`,
   () =>
     getPublicList({
       page: page.value,
       page_size: PAGE_SIZE,
+      sort: sort.value,
       ...(props.category ? { category: props.category } : {})
     }).catch(() => ({ items: [], page: page.value, pages: 1, total: 0 })),
   { default: () => ({ items: [], page: 1, pages: 1, total: 0 }) }
@@ -44,11 +54,50 @@ const { data: list } = await useAsyncData(
 
 function pageUrl(p: number) {
   const base = props.category ? `/news/${props.category}` : '/news'
-  return p > 1 ? `${base}?page=${p}` : base
+  const q = new URLSearchParams()
+  if (sort.value !== 'latest') q.set('sort', sort.value)
+  if (p > 1) q.set('page', String(p))
+  const qs = q.toString()
+  return qs ? `${base}?${qs}` : base
+}
+
+function sortUrl(s: 'latest' | 'hot') {
+  const base = props.category ? `/news/${props.category}` : '/news'
+  const q = new URLSearchParams()
+  if (s !== 'latest') q.set('sort', s)
+  if (page.value > 1) q.set('page', String(page.value))
+  const qs = q.toString()
+  return qs ? `${base}?${qs}` : base
 }
 </script>
 
 <style scoped>
+.sort-tabs {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+.sort-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: all var(--duration-fast);
+}
+.sort-tab:hover {
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+.sort-tab.active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+}
 .news-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
