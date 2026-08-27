@@ -122,17 +122,29 @@ if [ "$MODE" = "rollback" ]; then
     sed -i "s|^PORTAL_IMAGE=.*|PORTAL_IMAGE=\"$OLD_IMAGE\"|" "$DEPLOY_PATH/.env"
 fi
 
-# ---- 拉取并启动 ----
+# ---- 拉取并启动（三级回退：ghcr-proxy → NJU 镜像源 → 直连 ghcr.io）----
+# ISP 对大文件持续传输断流：代理与直连拉取均可能长期挂起，
+# 所有 pull 用 timeout 包装；失败后回退支持续传的国内镜像源
+REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
 if [ -n "$GITHUB_TOKEN" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_PROXY" ]; then
-    # 经本地代理拉取（私有镜像：代理无凭据时回退直连 ghcr.io）
-    if ! docker pull "$PORTAL_IMAGE" >/dev/null 2>&1; then
-        log_info "代理拉取失败，回退直连 ${IMAGE_ORIG}"
-        PORTAL_IMAGE="${IMAGE_ORIG,,}"
-        sed -i "s|^PORTAL_IMAGE=.*|PORTAL_IMAGE=\"$PORTAL_IMAGE\"|" "$DEPLOY_PATH/.env"
-        docker pull "$PORTAL_IMAGE" >/dev/null || log_error "镜像拉取失败: $PORTAL_IMAGE"
+    # 经本地代理拉取（私有镜像：代理无凭据时回退）
+    if ! timeout 600 docker pull "$PORTAL_IMAGE" >/dev/null 2>&1; then
+        MIRROR_IMAGE="${REGISTRY_MIRROR}/${IMAGE#ghcr.io/}:${IMAGE_TAG}"
+        MIRROR_IMAGE="${MIRROR_IMAGE,,}"
+        log_info "代理拉取失败/超时，回退国内镜像源: ${MIRROR_IMAGE}"
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY_MIRROR" -u oauth2 --password-stdin >/dev/null 2>&1 || true
+        if timeout 900 docker pull "$MIRROR_IMAGE" >/dev/null 2>&1; then
+            docker tag "$MIRROR_IMAGE" "$PORTAL_IMAGE"
+            log_ok "国内镜像源拉取成功，已 tag 为 ${PORTAL_IMAGE}"
+        else
+            log_info "国内镜像源拉取失败，回退直连 ${IMAGE_ORIG}"
+            PORTAL_IMAGE="${IMAGE_ORIG,,}"
+            sed -i "s|^PORTAL_IMAGE=.*|PORTAL_IMAGE=\"$PORTAL_IMAGE\"|" "$DEPLOY_PATH/.env"
+            timeout 600 docker pull "$PORTAL_IMAGE" >/dev/null || log_error "镜像拉取失败: $PORTAL_IMAGE"
+        fi
     fi
 else
-    docker pull "$PORTAL_IMAGE" >/dev/null || log_error "镜像拉取失败: $PORTAL_IMAGE"
+    timeout 600 docker pull "$PORTAL_IMAGE" >/dev/null || log_error "镜像拉取失败: $PORTAL_IMAGE"
 fi
 
 # 回滚记录（回滚时还原为新镜像，避免二次回滚又回旧值）
