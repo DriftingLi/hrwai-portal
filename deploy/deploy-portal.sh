@@ -122,11 +122,14 @@ if [ "$MODE" = "rollback" ]; then
     sed -i "s|^PORTAL_IMAGE=.*|PORTAL_IMAGE=\"$OLD_IMAGE\"|" "$DEPLOY_PATH/.env"
 fi
 
-# ---- 拉取并启动（三级回退：ghcr-proxy → NJU 镜像源 → 直连 ghcr.io）----
+# ---- 拉取并启动（本地缓存优先，三级回退：ghcr-proxy → NJU 镜像源 → 直连 ghcr.io）----
 # ISP 对大文件持续传输断流：代理与直连拉取均可能长期挂起，
 # 所有 pull 用 timeout 包装；失败后回退支持续传的国内镜像源
+# 本地已有该 tag（如经分块组装脚本预置）时零拉取直接启动
 REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
-if [ -n "$GITHUB_TOKEN" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_PROXY" ]; then
+if docker image inspect "$PORTAL_IMAGE" &>/dev/null; then
+    log_ok "镜像已缓存，跳过拉取: $PORTAL_IMAGE"
+elif [ -n "$GITHUB_TOKEN" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_PROXY" ]; then
     # 经本地代理拉取（私有镜像：代理无凭据时回退）
     if ! timeout 600 docker pull "$PORTAL_IMAGE" >/dev/null 2>&1; then
         MIRROR_IMAGE="${REGISTRY_MIRROR}/${IMAGE_ORIG#ghcr.io/}"
