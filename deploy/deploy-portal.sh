@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ======================================================================
-# deploy-portal.sh — 服务器端官网门户部署脚本
+# deploy-portal.sh — 服务器端官网门户部署脚本（PVE 宿主机 Docker 直连）
 # 由 GitHub Actions CD 通过 SSH 上传并执行；也可手动执行：
 #   bash deploy-portal.sh            # 正常部署
 #   bash deploy-portal.sh --rollback # 回滚到上一个版本
@@ -44,13 +44,50 @@ log_info "部署镜像: ${PORTAL_IMAGE} (原始: ${IMAGE_ORIG})"
 
 # ---- 前置检查 ----
 command -v docker >/dev/null 2>&1 || log_error "未找到 docker"
-command -v docker >/dev/null 2>&1 || exit 1
 
 # ---- 登录注册表（拉取私有镜像） ----
 if [ -n "$GITHUB_TOKEN" ] && [ "$REGISTRY" = "ghcr.io" ]; then
     echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u "deploy" --password-stdin >/dev/null 2>&1 || true
     log_ok "已登录 $REGISTRY"
 fi
+
+# ---- 镜像加速代理就绪检查 ----
+# REGISTRY_PROXY=127.0.0.1:5000 时确保 ghcr pull-through 缓存容器在运行
+# （与 FL deploy-remote.sh 管理的 ghcr-proxy 共用同一容器；未运行时自动创建）
+ensure_registry_proxy() {
+    [ -z "$REGISTRY_PROXY" ] && return 0
+    if curl -s -o /dev/null "http://${REGISTRY_PROXY}/v2/"; then
+        return 0
+    fi
+    if [ "$REGISTRY_PROXY" != "127.0.0.1:5000" ]; then
+        log_info "镜像加速代理非本机回环地址 (${REGISTRY_PROXY})，不做自动管理"
+        return 0
+    fi
+    log_info "启动 ghcr pull-through 缓存容器 (registry:2)..."
+    docker rm -f ghcr-proxy >/dev/null 2>&1 || true
+    docker pull registry:2 >/dev/null 2>&1 || true
+    local proxy_env=(-e REGISTRY_PROXY_REMOTEURL=https://ghcr.io)
+    # 私有镜像经代理拉取需要向上游 ghcr.io 认证（token 为 CI 短期凭据，
+    # 后续 FL 部署会重建容器刷新）
+    if [ -n "$GITHUB_TOKEN" ]; then
+        proxy_env+=(-e REGISTRY_PROXY_USERNAME=oauth2 -e "REGISTRY_PROXY_PASSWORD=$GITHUB_TOKEN")
+    fi
+    docker run -d --name ghcr-proxy --restart unless-stopped \
+        -p 127.0.0.1:5000:5000 \
+        "${proxy_env[@]}" \
+        -v ghcr-cache:/var/lib/registry \
+        registry:2 >/dev/null 2>&1 || true
+    local i
+    for i in $(seq 1 10); do
+        if curl -s -o /dev/null "http://127.0.0.1:5000/v2/"; then
+            log_ok "镜像加速代理就绪: 127.0.0.1:5000"
+            return 0
+        fi
+        sleep 1
+    done
+    log_info "镜像加速代理未就绪，拉取将回退直连 ghcr.io"
+}
+ensure_registry_proxy
 
 mkdir -p "$DEPLOY_PATH/deploy"
 cp "$DEPLOY_PATH/deploy/docker-compose.portal.yml" "$DEPLOY_PATH/docker-compose.portal.yml" 2>/dev/null \

@@ -5,9 +5,10 @@
 #   - main push（PR 合并后）→ check + build + 自动部署 production
 #   - workflow_dispatch    → 手动部署（可指定 environment / ref）
 # 使用前需配置的 Secrets / Variables（详见 README「部署」）：
-#   仓库级 Secrets: SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY / SSH_TARGET_KEY
-#                  PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
-#   环境级 Secrets (production / testing): SSH_JUMP_HOST / NUXT_API_INTERNAL_BASE
+#   仓库级 Secrets: PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
+#   环境级 Secrets (production / testing): SSH_HOST / SSH_PORT / SSH_USER /
+#                  SSH_PRIVATE_KEY / NUXT_API_INTERNAL_BASE
+#          production=pve-02 宿主机直连；testing=pve-01 宿主机直连
 #   仓库级 Variables: REGISTRY_PROXY=127.0.0.1:5000 / KEEP_IMAGES=3
 name: portal-ci
 
@@ -119,8 +120,10 @@ jobs:
           provenance: false
 
   # ============================================================
-  # Stage 3: 通过公网 SSH（ProxyJump pve → LXC）部署
+  # Stage 3: 通过公网 SSH 直连 PVE 宿主机部署
   #   分支 push → testing；main push → production；手动 → 指定环境
+  #   production=pve-02(SSH_HOST:SSH_PORT)、testing=pve-01(SSH_HOST:SSH_PORT)
+  #   均为宿主机 Docker 直连，无跳板
   # ============================================================
   deploy:
     needs: build
@@ -136,13 +139,11 @@ jobs:
       NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
       PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
       NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
-      # SSH 连接（公网 pve 跳板 + LXC 目标；跳板与 LXC 各需独立密钥）
+      # SSH 连接（公网直连 PVE 宿主机）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      SSH_TARGET_KEY: ${{ secrets.SSH_TARGET_KEY }}
-      SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -150,50 +151,23 @@ jobs:
           ref: ${{ needs.build.outputs.image_tag }}
 
       # --------------------------------------------------------
-      # Step 3.1: 配置 SSH（跳板模式：CI → pve 公网 → LXC 内网）
+      # Step 3.1: 配置 SSH（直连 PVE 宿主机）
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # LXC 目标密钥（与 pve 跳板密钥不同：pve-02 认 pve-02.pem，LXC 认 forklift-lxc）
-          if [ -n "$SSH_TARGET_KEY" ]; then
-            echo "$SSH_TARGET_KEY" > ~/.ssh/target_key
-            chmod 600 ~/.ssh/target_key
-            TARGET_IDENTITY="IdentityFile ~/.ssh/target_key"
-          else
-            TARGET_IDENTITY="IdentityFile ~/.ssh/deploy_key"
-          fi
-          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          if [ -n "$SSH_JUMP_HOST" ]; then
-            cat > ~/.ssh/config << EOF
-          Host jump
+          ssh-keyscan -p "$SSH_PORT" \
+            -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          cat > ~/.ssh/config << EOF
+          Host target
               HostName $SSH_HOST
               Port $SSH_PORT
               User $SSH_USER
               IdentityFile ~/.ssh/deploy_key
               StrictHostKeyChecking no
-
-          Host target
-              HostName $SSH_JUMP_HOST
-              User $SSH_USER
-              $TARGET_IDENTITY
-              ProxyJump jump
-              StrictHostKeyChecking no
           EOF
-            echo "SSH_TARGET=target" >> $GITHUB_ENV
-          else
-            cat > ~/.ssh/config << EOF
-          Host target
-              HostName $SSH_HOST
-              Port $SSH_PORT
-              User $SSH_USER
-              $TARGET_IDENTITY
-              StrictHostKeyChecking no
-          EOF
-            echo "SSH_TARGET=target" >> $GITHUB_ENV
-          fi
 
       # --------------------------------------------------------
       # Step 3.2: 上传部署文件并执行
@@ -201,17 +175,17 @@ jobs:
       - name: 上传部署文件
         run: |
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "$SSH_TARGET" "mkdir -p $DEPLOY_PATH/deploy"
+            "target" "mkdir -p $DEPLOY_PATH/deploy"
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
             deploy/deploy-portal.sh deploy/docker-compose.portal.yml \
-            "$SSH_TARGET:$DEPLOY_PATH/deploy/"
+            "target:$DEPLOY_PATH/deploy/"
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "$SSH_TARGET" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
+            "target" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
 
       - name: 执行远程部署
         run: |
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
-            "$SSH_TARGET" \
+            "target" \
             "cd $DEPLOY_PATH && env \
               IMAGE=ghcr.io/${{ github.repository }} \
               IMAGE_TAG=$IMAGE_TAG \
@@ -222,3 +196,22 @@ jobs:
               PORTAL_SITE_URL=$PORTAL_SITE_URL \
               NUXT_PUBLIC_BAIDU_VERIFICATION=$NUXT_PUBLIC_BAIDU_VERIFICATION \
               bash deploy/deploy-portal.sh"
+
+      # --------------------------------------------------------
+      # Step 3.3: 测试环境部署验证后停止容器，节省资源
+      # --------------------------------------------------------
+      - name: 测试环境停止容器
+        if: success() && (
+          (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment || 'production') == 'testing') ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main'))
+        run: |
+          echo "测试环境部署成功，停止容器以释放资源..."
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+            "target" \
+            "cd $DEPLOY_PATH && docker compose -f docker-compose.portal.yml down 2>&1 || true"
+          echo "✅ 测试环境容器已停止"
+
+      - name: 清理 SSH 密钥
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
