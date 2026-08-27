@@ -129,7 +129,7 @@ REGISTRY_MIRROR="${REGISTRY_MIRROR:-ghcr.nju.edu.cn}"
 if [ -n "$GITHUB_TOKEN" ] && [ "$REGISTRY" = "ghcr.io" ] && [ -n "$REGISTRY_PROXY" ]; then
     # 经本地代理拉取（私有镜像：代理无凭据时回退）
     if ! timeout 600 docker pull "$PORTAL_IMAGE" >/dev/null 2>&1; then
-        MIRROR_IMAGE="${REGISTRY_MIRROR}/${IMAGE#ghcr.io/}:${IMAGE_TAG}"
+        MIRROR_IMAGE="${REGISTRY_MIRROR}/${IMAGE_ORIG#ghcr.io/}"
         MIRROR_IMAGE="${MIRROR_IMAGE,,}"
         log_info "代理拉取失败/超时，回退国内镜像源: ${MIRROR_IMAGE}"
         echo "$GITHUB_TOKEN" | docker login "$REGISTRY_MIRROR" -u oauth2 --password-stdin >/dev/null 2>&1 || true
