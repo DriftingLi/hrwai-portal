@@ -1,5 +1,9 @@
 <template>
   <div class="content-detail-page">
+    <!-- 阅读进度条 -->
+    <div class="reading-progress" aria-hidden="true">
+      <div class="reading-progress-bar" :style="{ transform: `scaleX(${progress})` }"></div>
+    </div>
     <div class="container">
       <template v-if="detail">
         <!-- 文章头部 -->
@@ -34,7 +38,22 @@
         <!-- 主体网格 -->
         <div class="article-layout">
           <article class="article-main">
+            <!-- 移动端折叠目录（<1024px 显示） -->
+            <ArticleToc :items="toc" variant="mobile" />
             <div class="markdown-body" v-html="renderedContent"></div>
+
+            <!-- 分享 -->
+            <div class="article-share">
+              <button class="share-btn" :class="{ copied }" @click="copyLink">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path v-if="!copied" d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <polyline v-if="!copied" points="16 6 12 2 8 6" />
+                  <line v-if="!copied" x1="12" y1="2" x2="12" y2="15" />
+                  <polyline v-else points="20 6 9 17 4 12" />
+                </svg>
+                {{ copied ? '已复制' : '复制链接' }}
+              </button>
+            </div>
 
             <!-- 上一篇 / 下一篇 -->
             <nav class="article-nav">
@@ -67,8 +86,9 @@
             </nav>
           </article>
 
-          <!-- 侧边栏：相关资讯 -->
+          <!-- 侧边栏：目录 + 相关资讯 -->
           <aside class="article-sidebar">
+            <ArticleToc :items="toc" variant="desktop" />
             <h3 class="sidebar-title">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -83,7 +103,7 @@
               <li v-for="item in detail.related" :key="item.content_id">
                 <NuxtLink :to="`/content/${item.content_id}`" class="related-item">
                   <div class="related-cover-wrap" v-if="item.cover_image">
-                    <img :src="resolveFileUrl(item.cover_image)" :alt="item.title" class="related-cover" />
+                    <img :src="resolveFileUrl(item.cover_image)" :alt="item.title" class="related-cover" loading="lazy" decoding="async" />
                   </div>
                   <div class="related-cover-wrap related-cover-placeholder" v-else>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -104,14 +124,18 @@
         </div>
       </template>
     </div>
+    <!-- 正文图片灯箱 -->
+    <ClientOnly>
+      <Lightbox />
+    </ClientOnly>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { categoryLabel, type FeaturedDetail } from '~/api/featured'
 import { resolveFileUrl } from '~/utils/fileUrl'
-import { renderMarkdown } from '~/utils/markdown'
+import { renderMarkdown, extractToc } from '~/utils/markdown'
 import { formatDate } from '~/utils/formatDate'
 import { useSiteLinks } from '~/composables/useSiteLinks'
 import { useFeaturedApi } from '~/composables/useFeaturedApi'
@@ -146,6 +170,50 @@ onMounted(async () => {
 })
 
 const renderedContent = computed(() => renderMarkdown(detail.value?.content ?? ''))
+
+// 文章目录（h2/h3 锚点，id 由 renderMarkdown 注入）
+const toc = computed(() => extractToc(renderedContent.value))
+
+// ===== 阅读进度条（scroll → 文章区域滚动比例） =====
+const progress = ref(0)
+let articleEl: HTMLElement | null = null
+function onScroll() {
+  if (!articleEl) articleEl = document.querySelector('.article-layout')
+  if (!articleEl) return
+  const rect = articleEl.getBoundingClientRect()
+  const total = rect.height - window.innerHeight
+  if (total <= 0) {
+    progress.value = 1
+    return
+  }
+  progress.value = Math.min(Math.max(-rect.top / total, 0), 1)
+}
+
+// ===== 复制链接分享 =====
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch {
+    // 剪贴板不可用（如非安全上下文）时回退选中提示
+    copied.value = false
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onScroll)
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
 
 // ===== 文章级 SEO（标题/描述/OG/Article 结构化数据/canonical）=====
 const articleTitle = computed(() => detail.value?.title ?? '')
@@ -271,6 +339,55 @@ useHead({
   min-width: 0;
 }
 
+/* ===== 升级：阅读进度条 ===== */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: var(--z-fixed, 1030);
+  background: transparent;
+  pointer-events: none;
+}
+.reading-progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, #0EA5E9, #14B8A6);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* ===== 升级：复制链接分享 ===== */
+.article-share {
+  margin-top: var(--space-8, 32px);
+  display: flex;
+  justify-content: flex-end;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-height: 38px;
+  padding: 8px 18px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: #fff;
+  color: var(--color-text-secondary, #475569);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--duration-fast, 150ms), color var(--duration-fast, 150ms);
+}
+.share-btn:hover {
+  border-color: var(--color-primary-400, #38bdf8);
+  color: var(--color-primary-600, #0284c7);
+}
+.share-btn.copied {
+  border-color: var(--color-success, #10b981);
+  color: var(--color-success, #10b981);
+}
+
 /* 上一篇/下一篇 */
 .article-nav {
   display: flex;
@@ -341,6 +458,18 @@ useHead({
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   position: sticky;
   top: 100px;
+}
+
+/* ===== 升级：TOC 槽位显隐（移动折叠目录 / 桌面侧栏目录互斥） ===== */
+@media (min-width: 1024px) {
+  .article-main > details.toc-details {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  .article-sidebar > nav.toc-desktop {
+    display: none;
+  }
 }
 
 .sidebar-title {

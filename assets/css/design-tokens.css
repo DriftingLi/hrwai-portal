@@ -153,6 +153,27 @@
   --footer-bg: #F1F5F9;
   --ticker-border: #E2E8F0;
 
+  /* ===== 升级：玻璃拟态 ===== */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-dark: rgba(15, 23, 42, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-border-dark: rgba(148, 163, 184, 0.18);
+  --blur-glass: 16px;
+
+  /* ===== 升级：品牌光晕阴影 ===== */
+  --shadow-glow-primary: 0 0 24px rgba(14, 165, 233, 0.28);
+  --shadow-glow-accent: 0 0 24px rgba(20, 184, 166, 0.28);
+  --shadow-glow-brand: 0 8px 32px rgba(14, 165, 233, 0.25), 0 8px 32px rgba(20, 184, 166, 0.18);
+
+  /* ===== 升级：暗色 Hero 表面层级 ===== */
+  --surface-hero: #0B1120;
+  --surface-hero-alt: #111C33;
+  --hero-grid-line: rgba(125, 211, 252, 0.07);
+
+  /* ===== 升级：网格纹理 ===== */
+  --grid-line: rgba(148, 163, 184, 0.12);
+  --grid-size: 44px;
+
   /* 官网 section 间距 */
   --section-padding: 6rem;
   --section-padding-mobile: 3rem;

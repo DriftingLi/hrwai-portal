@@ -95,6 +95,68 @@ h1, h2, h3, h4, h5, h6 {
   50% { transform: translateY(-10px); }
 }
 
+/* ============ 升级工具类 ============ */
+
+/* 品牌渐变文字（sky → teal 135deg） */
+.text-gradient {
+  background: linear-gradient(135deg, #38BDF8 0%, #2DD4BF 55%, #14B8A6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* 网格纹理背景（纯 CSS 双 linear-gradient，无图片依赖） */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, var(--hero-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hero-grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+}
+
+/* 噪点纹理（内联 SVG data-URI，叠加在深色区消解"平板感"） */
+.bg-noise {
+  position: relative;
+}
+.bg-noise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* 玻璃拟态卡片基类（不支持 backdrop-filter 的浏览器自动回退为半透明实色） */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+}
+.glass-dark {
+  background: var(--glass-bg-dark);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: rgba(255, 255, 255, 0.94); }
+  .glass-dark { background: rgba(15, 23, 42, 0.92); }
+}
+
+/* ============ 页面切换过渡（nuxt.config app.pageTransition） ============ */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.28s var(--ease-default), transform 0.28s var(--ease-default);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .animate-fade-in-up {
   animation: fadeInUp var(--duration-slow) var(--ease-out) both;
 }
@@ -157,6 +219,16 @@ h1, h2, h3, h4, h5, h6 {
   .hero-subtitle,
   .hero-cta {
     opacity: 1 !important;
+    animation: none !important;
+  }
+  /* 页面切换过渡禁用（保留 opacity 立即切换） */
+  .page-enter-active,
+  .page-leave-active {
+    transition: none !important;
+  }
+  /* Hero 装饰动画禁用 */
+  .aurora-blob,
+  .mouse-wheel {
     animation: none !important;
   }
 }

@@ -6,7 +6,7 @@
         <div class="footer-brand">
           <div class="brand-logo">
             <img src="/images/HRWAIlogo.jpg" alt="和润天下" class="brand-logo-img" />
-            <span class="brand-name">和润天下</span>
+            <span class="brand-name text-gradient">和润天下</span>
           </div>
           <p class="brand-desc">
             和润天下人工智能科技有限公司，致力于用AI赋能叉车行业，推动残值评估与智能运维的数字化转型。

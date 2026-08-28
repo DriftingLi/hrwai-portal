@@ -12,10 +12,20 @@
     </div>
     <div v-else class="news-empty">暂无内容</div>
 
-    <nav v-if="list.pages > 1" class="news-pagination">
-      <NuxtLink v-if="page > 1" :to="pageUrl(page - 1)" class="page-link">上一页</NuxtLink>
-      <span class="page-info">第 {{ page }} / {{ list.pages }} 页</span>
-      <NuxtLink v-if="page < list.pages" :to="pageUrl(page + 1)" class="page-link">下一页</NuxtLink>
+    <nav v-if="list.pages > 1" class="news-pagination" aria-label="分页">
+      <NuxtLink :to="pageUrl(page - 1)" class="page-link" :class="{ disabled: page <= 1 }" aria-label="上一页">上一页</NuxtLink>
+      <template v-for="(p, idx) in paginationItems" :key="`${p}-${idx}`">
+        <span v-if="p === '...'" class="page-ellipsis" aria-hidden="true">…</span>
+        <NuxtLink
+          v-else
+          :to="pageUrl(p as number)"
+          class="page-num"
+          :class="{ active: p === page }"
+          :aria-current="p === page ? 'page' : undefined"
+          :aria-label="`第 ${p} 页`"
+        >{{ p }}</NuxtLink>
+      </template>
+      <NuxtLink :to="pageUrl(page + 1)" class="page-link" :class="{ disabled: page >= list.pages }" aria-label="下一页">下一页</NuxtLink>
     </nav>
   </div>
 </template>
@@ -51,6 +61,22 @@ const { data: list } = await useAsyncData(
     }).catch(() => ({ items: [], page: page.value, pages: 1, total: 0 })),
   { default: () => ({ items: [], page: 1, pages: 1, total: 0 }) }
 )
+
+/**
+ * 分页数字窗口（≤7 个数字 + 省略号），遵循：
+ * - 总页数 ≤7 时全部展示
+ * - 靠近开头：1 2 3 4 5 … last
+ * - 靠近末尾：1 … last-4 last-3 last-2 last-1 last
+ * - 中间：1 … p-1 p p+1 … last
+ */
+const paginationItems = computed<(number | '...')[]>(() => {
+  const total = list.value.pages
+  const cur = page.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (cur <= 4) return [1, 2, 3, 4, 5, '...', total]
+  if (cur >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, '...', cur - 1, cur, cur + 1, '...', total]
+})
 
 function pageUrl(p: number) {
   const base = props.category ? `/news/${props.category}` : '/news'
@@ -113,8 +139,9 @@ function sortUrl(s: 'latest' | 'hot') {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-6);
+  gap: var(--space-2);
   margin-top: var(--space-12);
+  flex-wrap: wrap;
 }
 .page-link {
   display: inline-flex;
@@ -134,8 +161,42 @@ function sortUrl(s: 'latest' | 'hot') {
   border-color: var(--color-primary-300);
   color: var(--color-primary-600);
 }
-.page-info {
+.page-link.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
   font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
+  font-weight: var(--font-medium);
+  text-decoration: none;
+  transition: all var(--duration-fast);
+}
+.page-num:hover {
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+.page-num.active {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.page-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  color: var(--color-text-muted);
+  user-select: none;
 }
 </style>
