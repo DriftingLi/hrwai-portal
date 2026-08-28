@@ -10,9 +10,14 @@ const siteUrl = buildSiteUrl('/', process.env.PORTAL_SITE_URL || '').replace(/\/
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-01',
 
-  modules: ['@nuxtjs/sitemap', '@nuxtjs/robots'],
+  modules: ['@nuxtjs/sitemap', '@nuxtjs/robots', 'motion-v/nuxt'],
 
   ssr: true,
+
+  // ===== 页面切换过渡（过渡类定义在 global.css；prefers-reduced-motion 下禁用） =====
+  app: {
+    pageTransition: { name: 'page', mode: 'out-in' }
+  },
 
   // ===== 站点 URL（site-config：sitemap/robots/canonical 解析统一来源） =====
   site: {

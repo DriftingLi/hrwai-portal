@@ -5,6 +5,7 @@
       <NuxtPage />
     </main>
     <PortalFooter />
+    <BackToTop />
   </div>
 </template>
 

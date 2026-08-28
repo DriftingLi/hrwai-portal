@@ -1,5 +1,8 @@
 <template>
-  <nav class="portal-navbar" :class="{ scrolled }">
+  <nav
+    class="portal-navbar"
+    :class="{ scrolled: scrolled || !isHome, hidden: navbarHidden }"
+  >
     <div class="navbar-container">
       <!-- Logo -->
       <NuxtLink to="/" class="logo-link" @click="goHome">
@@ -51,19 +54,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import type { PortalNavItem } from '~/config/portalNav'
 
 defineProps<{ menuItems: PortalNavItem[] }>()
 
 const router = useRouter()
+const route = useRoute()
 const scrolled = ref(false)
+const navbarHidden = ref(false)
 const mobileOpen = ref(false)
 const activeAnchor = ref('home')
+let lastScrollY = 0
+// 导航点击触发的平滑滚动期间不隐藏导航条（避免锚点跳转后导航消失）
+let suppressHideUntil = 0
+
+// 非首页（浅色背景）时导航条常驻深色玻璃底，保证白色文字可读
+const isHome = computed(() => route.path === '/')
 
 function onScroll() {
-  scrolled.value = window.scrollY > 80
+  const y = window.scrollY
+  scrolled.value = y > 80
+
+  // 滚动方向感知：向下滚隐藏、向上滚显现；触顶 / 菜单展开 / 点击跳转期间常显
+  if (y <= 80 || mobileOpen.value || Date.now() < suppressHideUntil) {
+    navbarHidden.value = false
+  } else if (y > lastScrollY + 4 && y > 400) {
+    navbarHidden.value = true
+  } else if (y < lastScrollY - 4) {
+    navbarHidden.value = false
+  }
+  lastScrollY = y
+
   // 更新当前活动锚点
   const sections = ['hero', 'about', 'products', 'cooperation', 'service', 'featured', 'footer']
   for (const id of sections) {
@@ -101,6 +124,8 @@ async function handleNavClick(item: PortalNavItem) {
   }
   if (hash) {
     await nextTick()
+    suppressHideUntil = Date.now() + 1200
+    navbarHidden.value = false
     const el = document.getElementById(hash)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' })
@@ -130,11 +155,26 @@ onUnmounted(() => {
   z-index: var(--z-sticky);
   background: transparent;
   transition: background var(--duration-normal) var(--ease-default),
-              box-shadow var(--duration-normal) var(--ease-default);
+              box-shadow var(--duration-normal) var(--ease-default),
+              transform var(--duration-normal) var(--ease-default),
+              border-color var(--duration-normal) var(--ease-default);
+  border-bottom: 1px solid transparent;
 }
 .portal-navbar.scrolled {
-  background: var(--surface-dark);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  background: var(--glass-bg-dark);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+  border-bottom-color: var(--glass-border-dark);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .portal-navbar.scrolled {
+    background: rgba(15, 23, 42, 0.94);
+  }
+}
+/* 向下滚动时导航条上滑隐藏（触顶 / 菜单展开 / 跳转期间不隐藏） */
+.portal-navbar.hidden {
+  transform: translateY(-100%);
 }
 
 .navbar-container {
@@ -283,6 +323,12 @@ onUnmounted(() => {
   }
   .mobile-menu {
     display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-navbar {
+    transition: none !important;
   }
 }
 

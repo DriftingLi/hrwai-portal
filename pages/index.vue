@@ -1,20 +1,73 @@
 <template>
   <div class="portal-home">
     <!-- ===== Hero ===== -->
-    <section id="hero" class="hero">
-      <img src="/images/hero-bg.webp" alt="" class="hero-bg" />
-      <div class="hero-overlay"></div>
-      <div class="hero-content">
-        <p class="hero-tagline">AI赋能叉车行业</p>
-        <h1 class="hero-title">和润天下 HRWAI</h1>
-        <p class="hero-subtitle">
-          和润天下人工智能科技有限公司 — 深耕工程车辆垂直领域，专注于人工智能研发及场景落地。
-        </p>
-        <div class="hero-cta">
-          <a href="#about" class="btn-primary" @click.prevent="scrollTo('about')">了解我们</a>
-          <a href="#products" class="btn-outline" @click.prevent="scrollTo('products')">核心服务</a>
-        </div>
+    <section id="hero" class="hero" @mousemove="onHeroMouseMove">
+      <img src="/images/hero-bg.webp" alt="" class="hero-bg" fetchpriority="high" />
+      <!-- 极光光斑层：SSR 静态兜底 + 桌面端鼠标视差 -->
+      <div class="hero-aurora" :style="auroraStyle" aria-hidden="true">
+        <div class="aurora-blob aurora-blob--1"></div>
+        <div class="aurora-blob aurora-blob--2"></div>
+        <div class="aurora-blob aurora-blob--3"></div>
       </div>
+      <div class="hero-grid bg-grid" aria-hidden="true"></div>
+      <ClientOnly>
+        <HeroCanvas />
+      </ClientOnly>
+      <div class="hero-overlay" aria-hidden="true"></div>
+      <MotionConfig :reducedMotion="'user'">
+        <div class="hero-content">
+          <Motion
+            tag="span"
+            class="hero-badge"
+            :initial="{ opacity: 0, y: 18 }"
+            :enter="{ opacity: 1, y: 0 }"
+            :transition="{ duration: 0.5, ease: 'easeOut' }"
+          >
+            AI × 叉车全生命周期
+          </Motion>
+          <Motion
+            tag="h1"
+            class="hero-title"
+            :initial="{ opacity: 0, y: 26 }"
+            :enter="{ opacity: 1, y: 0 }"
+            :transition="{ duration: 0.55, delay: 0.12, ease: 'easeOut' }"
+          >
+            和润天下 <span class="text-gradient">HRWAI</span>
+          </Motion>
+          <Motion
+            tag="p"
+            class="hero-subtitle"
+            :initial="{ opacity: 0, y: 26 }"
+            :enter="{ opacity: 1, y: 0 }"
+            :transition="{ duration: 0.55, delay: 0.24, ease: 'easeOut' }"
+          >
+            和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
+            驱动叉车全生命周期智能化升级。
+          </Motion>
+          <Motion
+            class="hero-cta"
+            :initial="{ opacity: 0, y: 26 }"
+            :enter="{ opacity: 1, y: 0 }"
+            :transition="{ duration: 0.55, delay: 0.36, ease: 'easeOut' }"
+          >
+            <a href="#about" class="btn-primary" @click.prevent="scrollTo('about')">了解我们</a>
+            <a href="#products" class="btn-outline" @click.prevent="scrollTo('products')">核心服务</a>
+          </Motion>
+        </div>
+        <!-- 向下探索指示器 -->
+        <Motion
+          class="hero-scroll-hint"
+          aria-hidden="true"
+          :initial="{ opacity: 0 }"
+          :enter="{ opacity: 1 }"
+          :transition="{ duration: 0.6, delay: 0.9 }"
+        >
+          <div class="mouse-icon"><span class="mouse-wheel"></span></div>
+          <span class="hero-scroll-text">向下探索</span>
+        </Motion>
+      </MotionConfig>
+      <!-- 底部渐隐：深色 Hero 无缝过渡到浅色内容区 -->
+      <div class="hero-fade" aria-hidden="true"></div>
     </section>
 
     <!-- ===== About ===== -->
@@ -26,7 +79,7 @@
         </div>
         <div class="about-grid">
           <div class="about-image" v-reveal.slide-left>
-            <img src="/images/about.webp" alt="和润天下公司办公环境" />
+            <img src="/images/about.webp" alt="和润天下公司办公环境" loading="lazy" decoding="async" />
           </div>
           <div class="about-content" v-reveal.slide-right>
             <p class="about-paragraph">
@@ -37,15 +90,15 @@
             </p>
             <div class="stat-grid">
               <div class="stat-card">
-                <span class="stat-number">5+</span>
+                <span class="stat-number"><CountUpNumber :value="5" suffix="+" /></span>
                 <p class="stat-label">行业经验（年）</p>
               </div>
               <div class="stat-card">
-                <span class="stat-number">20+</span>
+                <span class="stat-number"><CountUpNumber :value="20" suffix="+" /></span>
                 <p class="stat-label">覆盖品牌</p>
               </div>
               <div class="stat-card">
-                <span class="stat-number">20+</span>
+                <span class="stat-number"><CountUpNumber :value="20" suffix="+" /></span>
                 <p class="stat-label">专利</p>
               </div>
             </div>
@@ -87,6 +140,7 @@
           <div
             v-for="(item, index) in products"
             :key="item.title"
+            v-spotlight
             class="service-card"
             v-reveal="index * 100"
             @click="handleCardClick(item)"
@@ -109,6 +163,32 @@
       </div>
     </section>
 
+    <!-- ===== Tech Advantages 核心技术优势（占位文案，待业务确认） ===== -->
+    <section id="tech" class="section tech-advantages">
+      <div class="container">
+        <div class="section-title-wrap" v-reveal>
+          <h2 class="section-title">核心技术优势<span class="title-underline"></span></h2>
+          <p class="section-subtitle">自研技术底座，让 AI 真正落地叉车产业场景</p>
+        </div>
+        <div class="tech-grid">
+          <div
+            v-for="(item, index) in techAdvantages"
+            :key="item.title"
+            v-spotlight
+            class="tech-card"
+            v-reveal="index * 100"
+          >
+            <div class="tech-icon" :style="{ background: techColors[index]!.bg, color: techColors[index]!.fg }">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
+            </div>
+            <h3 class="tech-title">{{ item.title }}</h3>
+            <p class="tech-desc">{{ item.desc }}</p>
+            <span class="tech-metric" :style="{ color: techColors[index]!.fg }">{{ item.metric }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== Cooperation ===== -->
     <section id="cooperation" class="section cooperation">
       <div class="container">
@@ -117,7 +197,7 @@
           <p class="section-subtitle">携手多方伙伴，共建叉车产业智能生态</p>
         </div>
         <div class="cooperation-grid">
-          <div v-for="(item, index) in cooperations" :key="item.title" v-reveal="index * 120" class="coop-card">
+          <div v-for="(item, index) in cooperations" :key="item.title" v-spotlight v-reveal="index * 120" class="coop-card">
             <div class="coop-icon" :style="{ background: coopColors[index]!.bg, color: coopColors[index]!.fg }">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
             </div>
@@ -133,6 +213,33 @@
             <a href="#footer" class="btn-coop" @click.prevent="scrollTo('footer')">联系我们</a>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ===== Milestones 发展历程（占位年份/事件，待业务确认） ===== -->
+    <section id="milestones" class="section milestones">
+      <div class="container">
+        <div class="section-title-wrap" v-reveal>
+          <h2 class="section-title">发展历程<span class="title-underline"></span></h2>
+          <p class="section-subtitle">从技术积累到产业生态，一步一个脚印</p>
+        </div>
+        <ol class="timeline">
+          <li
+            v-for="(item, index) in milestones"
+            :key="item.year"
+            class="timeline-item"
+            v-reveal="index * 140"
+          >
+            <div class="timeline-marker" aria-hidden="true">
+              <span class="timeline-dot"></span>
+            </div>
+            <div class="timeline-card">
+              <span class="timeline-year text-gradient">{{ item.year }}</span>
+              <h3 class="timeline-title">{{ item.title }}</h3>
+              <p class="timeline-desc">{{ item.desc }}</p>
+            </div>
+          </li>
+        </ol>
       </div>
     </section>
 
@@ -153,6 +260,10 @@
             </button>
           </div>
           <div class="gc-pagination">{{ String(carouselIndex + 1).padStart(2, '0') }} / {{ String(guarantees.length).padStart(2, '0') }}</div>
+          <!-- 自动播放进度条（手动切换重置、悬停暂停） -->
+          <div class="gc-progress" :class="{ 'is-paused': autoplayPaused }" aria-hidden="true">
+            <div :key="carouselIndex" class="gc-progress-bar"></div>
+          </div>
         </div>
         <!-- 右侧卡片 -->
         <div
@@ -174,6 +285,17 @@
           <div class="gc-card-deco gc-card-deco--1"></div>
           <div class="gc-card-deco gc-card-deco--2"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ===== FAQ 常见问题 ===== -->
+    <section id="faq" class="section faq-section">
+      <div class="container">
+        <div class="section-title-wrap" v-reveal>
+          <h2 class="section-title">常见问题<span class="title-underline"></span></h2>
+          <p class="section-subtitle">关于评估、培训、交易与合作的高频疑问</p>
+        </div>
+        <FaqAccordion v-reveal="100" />
       </div>
     </section>
 
@@ -207,6 +329,8 @@
                 v-if="item.cover_image"
                 :src="resolveFileUrl(item.cover_image)"
                 :alt="item.title"
+                loading="lazy"
+                decoding="async"
               />
               <div v-else class="featured-card__placeholder">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -251,10 +375,18 @@
     </section>
 
     <!-- ===== CTA Banner ===== -->
-    <section class="cta-banner">
+    <section class="cta-banner bg-noise">
+      <div class="cta-aurora" aria-hidden="true">
+        <div class="cta-blob cta-blob--1"></div>
+        <div class="cta-blob cta-blob--2"></div>
+      </div>
       <div class="container narrow cta-content">
         <h2 class="cta-title" v-reveal>准备好开启AI驱动的叉车之旅了吗？</h2>
         <p class="cta-subtitle" v-reveal="100">加入和润天下，获取一整套成熟的叉车行业AI解决方案。</p>
+        <div class="cta-actions" v-reveal="200">
+          <a href="#footer" class="btn-cta" @click.prevent="scrollTo('footer')">联系我们</a>
+          <a href="#products" class="btn-cta-ghost" @click.prevent="scrollTo('products')">了解服务</a>
+        </div>
       </div>
     </section>
   </div>
@@ -385,6 +517,83 @@ const coopColors = [
   { fg: '#10B981', bg: '#ECFDF5' }  // 绿
 ]
 
+/* ---------- 核心技术优势（TODO(内容替换): 占位文案待业务确认） ---------- */
+interface TechAdvantage {
+  title: string
+  desc: string
+  icon: string
+  metric: string
+}
+
+const techAdvantages: TechAdvantage[] = [
+  {
+    title: 'AI 残值评估算法',
+    desc: '自研多维度加权评估模型，融合车况、工时、维修记录与市场行情数据，输出带置信区间的残值测算。',
+    icon: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    metric: '评估准确率行业领先'
+  },
+  {
+    title: '叉车行业大数据',
+    desc: '沉淀多年垂直领域数据资产，覆盖主流品牌与机型，为模型训练与行业洞察提供高质量数据底座。',
+    icon: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+    metric: '20+ 品牌数据覆盖'
+  },
+  {
+    title: '大模型智能问答',
+    desc: '基于大语言模型的垂直领域问答引擎，在选购、维保、故障诊断等场景提供专业可解释的回答。',
+    icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    metric: '7x24 小时在线'
+  },
+  {
+    title: '产学研深度绑定',
+    desc: '依托高校教授团队与硕博研发力量，持续推动科研成果向产业工具转化，技术迭代有源头活水。',
+    icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+    metric: '60+ 专利及软著'
+  }
+]
+
+const techColors = [
+  { fg: '#0EA5E9', bg: '#F0F9FF' }, // 蓝
+  { fg: '#14B8A6', bg: '#F0FDFA' }, // 青
+  { fg: '#8B5CF6', bg: '#F5F3FF' }, // 紫
+  { fg: '#F59E0B', bg: '#FFFBEB' }  // 橙
+]
+
+/* ---------- 发展历程（TODO(内容替换): 占位年份与事件待业务确认） ---------- */
+interface Milestone {
+  year: string
+  title: string
+  desc: string
+}
+
+const milestones: Milestone[] = [
+  {
+    year: '2021',
+    title: '公司成立',
+    desc: '和润天下于广州成立，确立"AI 赋能叉车行业"方向，组建核心研发团队。'
+  },
+  {
+    year: '2023',
+    title: '残值评估系统上线',
+    desc: 'AI 残值智能评估模型完成研发并投入商用，服务首批经销商与金融机构。'
+  },
+  {
+    year: '2024',
+    title: '培训认证体系落地',
+    desc: '叉车维修培训认证体系上线，线上线下融合教学覆盖全系列主流机型。'
+  },
+  {
+    year: '2025',
+    title: 'AI 叉车助手发布',
+    desc: '大模型驱动的智能问答助手正式发布，垂直领域知识服务 7x24 在线。'
+  },
+  {
+    year: '2026',
+    title: '产业生态扩展',
+    desc: '二手交易撮合、保险金融等生态伙伴陆续接入，产业智能化闭环成形。'
+  }
+]
+
 const guarantees = [
   { no: '01', title: '数据安全保障', desc: '企业级加密存储，严格的数据访问权限控制，确保客户数据资产万无一失。' },
   { no: '02', title: '模型精度保障', desc: '持续训练优化，评估准确率行业领先，为业务决策提供可靠数据支撑。' },
@@ -401,7 +610,8 @@ const carouselIndex = ref(0)
 const currentGuarantee = computed(() => guarantees[carouselIndex.value]!)
 let autoplayTimer: ReturnType<typeof setInterval> | null = null
 const AUTOPLAY_INTERVAL = 2500
-let isPaused = false
+// ref 化供进度条暂停态绑定
+const autoplayPaused = ref(false)
 
 function carouselNext() {
   carouselIndex.value = (carouselIndex.value + 1) % guarantees.length
@@ -412,7 +622,7 @@ function carouselPrev() {
 
 function startAutoplay() {
   stopAutoplay()
-  if (isPaused) return
+  if (autoplayPaused.value) return
   autoplayTimer = setInterval(carouselNext, AUTOPLAY_INTERVAL)
 }
 function stopAutoplay() {
@@ -432,11 +642,11 @@ function manualPrev() {
 }
 /* 悬停暂停 / 离开恢复 */
 function pauseAutoplay() {
-  isPaused = true
+  autoplayPaused.value = true
   stopAutoplay()
 }
 function resumeAutoplay() {
-  isPaused = false
+  autoplayPaused.value = false
   startAutoplay()
 }
 
@@ -446,6 +656,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAutoplay()
   stopFeaturedAutoplay()
+  cancelAnimationFrame(parallaxRaf)
 })
 
 function scrollTo(id: string) {
@@ -454,6 +665,42 @@ function scrollTo(id: string) {
     el.scrollIntoView({ behavior: 'smooth' })
   }
 }
+
+/* ---------- Hero 极光层鼠标视差（仅桌面精准指针 + 未开启减少动画） ---------- */
+const auroraStyle = ref<Record<string, string>>({})
+let parallaxRaf = 0
+let parallaxTargetX = 0
+let parallaxTargetY = 0
+let parallaxX = 0
+let parallaxY = 0
+let parallaxEnabled = false
+
+function onHeroMouseMove(e: MouseEvent) {
+  if (!parallaxEnabled) return
+  parallaxTargetX = (e.clientX / window.innerWidth - 0.5) * 40 // ±20px
+  parallaxTargetY = (e.clientY / window.innerHeight - 0.5) * 40
+}
+
+function parallaxLoop() {
+  // lerp 缓动：光斑层以 6% 步长追随目标，避免生硬跳变
+  parallaxX += (parallaxTargetX - parallaxX) * 0.06
+  parallaxY += (parallaxTargetY - parallaxY) * 0.06
+  auroraStyle.value = {
+    transform: `translate3d(${parallaxX.toFixed(2)}px, ${parallaxY.toFixed(2)}px, 0)`
+  }
+  parallaxRaf = requestAnimationFrame(parallaxLoop)
+}
+
+onMounted(() => {
+  const finePointer =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: fine)').matches &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (finePointer) {
+    parallaxEnabled = true
+    parallaxRaf = requestAnimationFrame(parallaxLoop)
+  }
+})
 
 /* ---------- 内容精选 ---------- */
 interface FeaturedListItem {
@@ -710,6 +957,7 @@ function resumeFeaturedAutoplay() {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background: var(--surface-hero);
 }
 .hero-bg {
   position: absolute;
@@ -718,6 +966,54 @@ function resumeFeaturedAutoplay() {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0.16;
+  filter: saturate(0.55);
+}
+/* 极光光斑层：品牌色 radial 光斑缓慢漂移（SSR 静态兜底 + 桌面端鼠标视差） */
+.hero-aurora {
+  position: absolute;
+  inset: -8%;
+  will-change: transform;
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+}
+.aurora-blob--1 {
+  width: 46vw;
+  height: 46vw;
+  left: -8%;
+  top: -12%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.4) 0%, transparent 65%);
+  animation: auroraDrift 16s var(--ease-default) infinite alternate;
+}
+.aurora-blob--2 {
+  width: 40vw;
+  height: 40vw;
+  right: -6%;
+  top: 8%;
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.34) 0%, transparent 65%);
+  animation: auroraDrift 20s var(--ease-default) infinite alternate-reverse;
+}
+.aurora-blob--3 {
+  width: 34vw;
+  height: 34vw;
+  left: 32%;
+  bottom: -16%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, transparent 65%);
+  animation: auroraDrift 24s var(--ease-default) infinite alternate;
+}
+@keyframes auroraDrift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(4%, 6%, 0) scale(1.08); }
+}
+/* 网格纹理：径向遮罩让边缘自然淡出 */
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 25%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 25%, transparent 78%);
 }
 .hero-overlay {
   position: absolute;
@@ -725,7 +1021,12 @@ function resumeFeaturedAutoplay() {
   left: 0;
   width: 100%;
   height: 100%;
-  background: var(--gradient-hero-overlay);
+  background: linear-gradient(
+    180deg,
+    rgba(11, 17, 32, 0.5) 0%,
+    rgba(11, 17, 32, 0.2) 40%,
+    rgba(11, 17, 32, 0.62) 100%
+  );
 }
 .hero-content {
   position: relative;
@@ -735,30 +1036,42 @@ function resumeFeaturedAutoplay() {
   padding: var(--space-32) var(--space-6) var(--space-16);
   text-align: center;
 }
-.hero-tagline {
-  font-size: var(--text-base);
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-full);
+  background: var(--glass-bg-dark);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+  border: 1px solid var(--glass-border-dark);
+  font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--color-primary-200);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-bottom: var(--space-6);
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-8);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .hero-badge {
+    background: rgba(15, 23, 42, 0.92);
+  }
 }
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-size: clamp(2.75rem, 6.5vw, 5rem);
   font-weight: var(--font-bold);
   line-height: var(--leading-tight);
   letter-spacing: -0.025em;
   color: #fff;
   margin: 0 auto var(--space-8);
-  max-width: 800px;
+  max-width: 860px;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 .hero-subtitle {
   font-size: clamp(var(--text-base), 2vw, var(--text-lg));
   line-height: var(--leading-relaxed);
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(226, 232, 240, 0.88);
   max-width: 640px;
   margin: 0 auto var(--space-12);
 }
@@ -768,25 +1081,53 @@ function resumeFeaturedAutoplay() {
   justify-content: center;
   flex-wrap: wrap;
 }
-/* Hero 首屏加载动画：tagline → title → subtitle → CTA 依次淡入上移 */
-.hero-tagline,
-.hero-title,
-.hero-subtitle,
-.hero-cta {
-  opacity: 0;
-  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
+/* 向下探索指示器 */
+.hero-scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  z-index: 1;
 }
-.hero-tagline {
-  animation-delay: 0ms;
+.mouse-icon {
+  width: 24px;
+  height: 38px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-full);
+  display: flex;
+  justify-content: center;
+  padding-top: 7px;
 }
-.hero-title {
-  animation-delay: 120ms;
+.mouse-wheel {
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.75);
+  animation: scrollWheel 1.8s var(--ease-default) infinite;
 }
-.hero-subtitle {
-  animation-delay: 240ms;
+@keyframes scrollWheel {
+  0% { opacity: 1; transform: translateY(0); }
+  65% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 0; transform: translateY(0); }
 }
-.hero-cta {
-  animation-delay: 360ms;
+.hero-scroll-text {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.2em;
+}
+/* 底部渐隐：深色 Hero 无缝过渡到浅色内容区 */
+.hero-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(to bottom, transparent 0%, var(--color-bg-card) 100%);
+  pointer-events: none;
 }
 .btn-primary {
   display: inline-flex;
@@ -1366,6 +1707,16 @@ function resumeFeaturedAutoplay() {
   .hero-content {
     padding: var(--space-32) var(--space-4) var(--space-12);
   }
+  /* 移动端降低光斑模糊开销、收紧指示器位置 */
+  .aurora-blob {
+    filter: blur(48px);
+  }
+  .hero-scroll-hint {
+    bottom: 20px;
+  }
+  .hero-fade {
+    height: 80px;
+  }
   .hero-cta {
     flex-direction: column;
     align-items: stretch;
@@ -1590,6 +1941,317 @@ function resumeFeaturedAutoplay() {
   }
   .featured-card__title {
     font-size: var(--text-xl);
+  }
+}
+
+/* ============ 升级：卡片 spotlight 高光层（配合 v-spotlight 指令） ============ */
+.service-card::before,
+.coop-card::before,
+.tech-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    360px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(14, 165, 233, 0.09),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-normal);
+  pointer-events: none;
+}
+.service-card:hover::before,
+.coop-card:hover::before,
+.tech-card:hover::before {
+  opacity: 1;
+}
+.coop-card {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ============ 升级：核心技术优势 ============ */
+.tech-advantages {
+  background: var(--color-bg-page);
+}
+.tech-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+}
+.tech-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-8);
+  transition: box-shadow var(--duration-normal), transform var(--duration-normal), border-color var(--duration-fast);
+}
+.tech-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
+}
+.tech-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-6);
+  transition: transform var(--duration-normal) var(--ease-spring);
+}
+.tech-card:hover .tech-icon {
+  transform: scale(1.08) rotate(-3deg);
+}
+.tech-title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-3);
+}
+.tech-desc {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-6);
+}
+.tech-metric {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.02em;
+}
+
+/* ============ 升级：发展历程时间线 ============ */
+.milestones {
+  background: var(--color-bg-card);
+}
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+/* 移动端：纵向左侧连线 */
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to bottom, rgba(14, 165, 233, 0.35), rgba(20, 184, 166, 0.35));
+}
+.timeline-item {
+  position: relative;
+  padding-left: var(--space-10);
+}
+.timeline-marker {
+  position: absolute;
+  left: 0;
+  top: 4px;
+}
+.timeline-dot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-card);
+  border: 3px solid var(--color-primary-500);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
+}
+.timeline-card {
+  background: var(--surface-card-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  transition: box-shadow var(--duration-normal), transform var(--duration-normal), border-color var(--duration-fast);
+}
+.timeline-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
+}
+.timeline-year {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  line-height: 1;
+  display: inline-block;
+  margin-bottom: var(--space-2);
+}
+.timeline-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-2);
+}
+.timeline-desc {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .tech-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  /* 桌面端：横向时间线 */
+  .timeline {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+  .timeline::before {
+    left: 8px;
+    right: 8px;
+    top: 7px;
+    bottom: auto;
+    width: auto;
+    height: 2px;
+    background: linear-gradient(to right, rgba(14, 165, 233, 0.35), rgba(20, 184, 166, 0.35));
+  }
+  .timeline-item {
+    flex: 1;
+    padding-left: 0;
+    padding-top: var(--space-10);
+  }
+  .timeline-marker {
+    top: 0;
+    left: 0;
+  }
+}
+
+/* ============ 升级：服务保障自动播放进度条 ============ */
+.gc-progress {
+  width: 140px;
+  height: 3px;
+  margin-top: var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.gc-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient-brand);
+  transform-origin: left center;
+  animation: gcProgress 2.5s linear both;
+}
+@keyframes gcProgress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.gc-progress.is-paused .gc-progress-bar {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-progress-bar {
+    animation: none !important;
+    transform: none;
+  }
+}
+
+/* ============ 升级：FAQ 板块 ============ */
+.faq-section {
+  background: var(--color-bg-page);
+}
+
+/* ============ 升级：CTA 光斑 + 双按钮 ============ */
+.cta-banner {
+  position: relative;
+  overflow: hidden;
+}
+.cta-aurora {
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+}
+.cta-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+}
+.cta-blob--1 {
+  width: 40vw;
+  height: 40vw;
+  left: -5%;
+  top: -30%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, transparent 65%);
+  animation: auroraDrift 18s var(--ease-default) infinite alternate;
+}
+.cta-blob--2 {
+  width: 36vw;
+  height: 36vw;
+  right: -5%;
+  bottom: -40%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, transparent 65%);
+  animation: auroraDrift 22s var(--ease-default) infinite alternate-reverse;
+}
+.cta-content {
+  position: relative;
+  z-index: 1;
+}
+.cta-actions {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 32px;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.btn-cta-ghost:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta-blob {
+    animation: none !important;
+  }
+}
+
+/* ============ 升级：内容精选卡片视觉 ============ */
+.featured-card__media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.35) 0%, transparent 45%);
+  pointer-events: none;
+}
+.featured-card__tag {
+  background: var(--glass-bg-dark);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+  border: 1px solid var(--glass-border-dark);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .featured-card__tag {
+    background: rgba(15, 23, 42, 0.9);
   }
 }
 </style>

@@ -1,6 +1,8 @@
-// v-reveal 滚动入场动画指令（客户端专用；SSR 首屏不参与）。
+// 客户端自定义指令注册。
 import { vReveal } from '~/directives/reveal'
+import { vSpotlight } from '~/directives/spotlight'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.directive('reveal', vReveal)
+  nuxtApp.vueApp.directive('spotlight', vSpotlight)
 })

@@ -7,6 +7,7 @@
           :src="resolveFileUrl(item.cover_image)"
           :alt="item.title"
           loading="lazy"
+          decoding="async"
         />
         <div v-else class="news-card__placeholder">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -45,11 +46,12 @@ defineProps<{ item: FeaturedContent }>()
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: box-shadow var(--duration-normal), transform var(--duration-normal);
+  transition: box-shadow var(--duration-normal), transform var(--duration-normal), border-color var(--duration-fast);
 }
 .news-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 .news-card__link {
   display: block;
@@ -70,7 +72,7 @@ defineProps<{ item: FeaturedContent }>()
   transition: transform var(--duration-slow);
 }
 .news-card:hover .news-card__media img {
-  transform: scale(1.03);
+  transform: scale(1.05);
 }
 .news-card__placeholder {
   position: absolute;
