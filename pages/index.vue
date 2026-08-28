@@ -20,7 +20,7 @@
             tag="span"
             class="hero-badge"
             :initial="{ opacity: 0, y: 18 }"
-            :enter="{ opacity: 1, y: 0 }"
+            :animate="{ opacity: 1, y: 0 }"
             :transition="{ duration: 0.5, ease: 'easeOut' }"
           >
             AI × 叉车全生命周期
@@ -29,7 +29,7 @@
             tag="h1"
             class="hero-title"
             :initial="{ opacity: 0, y: 26 }"
-            :enter="{ opacity: 1, y: 0 }"
+            :animate="{ opacity: 1, y: 0 }"
             :transition="{ duration: 0.55, delay: 0.12, ease: 'easeOut' }"
           >
             和润天下 <span class="text-gradient">HRWAI</span>
@@ -38,7 +38,7 @@
             tag="p"
             class="hero-subtitle"
             :initial="{ opacity: 0, y: 26 }"
-            :enter="{ opacity: 1, y: 0 }"
+            :animate="{ opacity: 1, y: 0 }"
             :transition="{ duration: 0.55, delay: 0.24, ease: 'easeOut' }"
           >
             和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
@@ -47,7 +47,7 @@
           <Motion
             class="hero-cta"
             :initial="{ opacity: 0, y: 26 }"
-            :enter="{ opacity: 1, y: 0 }"
+            :animate="{ opacity: 1, y: 0 }"
             :transition="{ duration: 0.55, delay: 0.36, ease: 'easeOut' }"
           >
             <a href="#about" class="btn-primary" @click.prevent="scrollTo('about')">了解我们</a>
@@ -59,7 +59,7 @@
           class="hero-scroll-hint"
           aria-hidden="true"
           :initial="{ opacity: 0 }"
-          :enter="{ opacity: 1 }"
+          :animate="{ opacity: 1 }"
           :transition="{ duration: 0.6, delay: 0.9 }"
         >
           <div class="mouse-icon"><span class="mouse-wheel"></span></div>
@@ -71,7 +71,9 @@
     </section>
 
     <!-- ===== About ===== -->
-    <section id="about" class="section about">
+    <section id="about" class="section about has-texture has-texture-light has-fade" style="--next-bg: var(--surface-dark)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">公司介绍<span class="title-underline"></span></h2>
@@ -108,7 +110,9 @@
     </section>
 
     <!-- ===== Founder ===== -->
-    <section class="section founder">
+    <section class="section founder has-texture has-texture-dark has-fade" style="--next-bg: var(--color-primary-50)">
+      <div class="dark-aurora" aria-hidden="true"><div class="dark-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container narrow">
         <div class="founder-avatar" v-reveal.zoom>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -130,7 +134,9 @@
     </section>
 
     <!-- ===== Products ===== -->
-    <section id="products" class="section products">
+    <section id="products" class="section products has-texture has-texture-light has-fade" style="--next-bg: var(--color-bg-page)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">核心服务<span class="title-underline"></span></h2>
@@ -164,7 +170,9 @@
     </section>
 
     <!-- ===== Tech Advantages 核心技术优势（占位文案，待业务确认） ===== -->
-    <section id="tech" class="section tech-advantages">
+    <section id="tech" class="section tech-advantages has-texture has-texture-light has-fade" style="--next-bg: var(--color-accent-50)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">核心技术优势<span class="title-underline"></span></h2>
@@ -190,7 +198,9 @@
     </section>
 
     <!-- ===== Cooperation ===== -->
-    <section id="cooperation" class="section cooperation">
+    <section id="cooperation" class="section cooperation has-texture has-texture-light has-fade" style="--next-bg: var(--color-bg-card)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">合作模式<span class="title-underline"></span></h2>
@@ -217,7 +227,9 @@
     </section>
 
     <!-- ===== Milestones 发展历程（占位年份/事件，待业务确认） ===== -->
-    <section id="milestones" class="section milestones">
+    <section id="milestones" class="section milestones has-texture has-texture-light has-fade" style="--next-bg: var(--surface-dark)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">发展历程<span class="title-underline"></span></h2>
@@ -244,7 +256,9 @@
     </section>
 
     <!-- ===== Service Guarantee ===== -->
-    <section id="service" class="section service-guarantee" v-reveal>
+    <section id="service" class="section service-guarantee has-texture has-texture-dark has-fade" style="--next-bg: var(--color-bg-page)" v-reveal>
+      <div class="dark-aurora" aria-hidden="true"><div class="dark-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container guarantee-carousel">
         <!-- 左侧面板 -->
         <div class="gc-left">
@@ -289,7 +303,9 @@
     </section>
 
     <!-- ===== FAQ 常见问题 ===== -->
-    <section id="faq" class="section faq-section">
+    <section id="faq" class="section faq-section has-texture has-texture-light has-fade" style="--next-bg: var(--color-bg-card)">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">常见问题<span class="title-underline"></span></h2>
@@ -300,7 +316,9 @@
     </section>
 
     <!-- ===== Featured 内容精选 ===== -->
-    <section id="featured" class="section featured-section" v-if="featuredList.length">
+    <section id="featured" class="section featured-section has-texture has-texture-light has-fade" style="--next-bg: #0EA5E9" v-if="featuredList.length">
+      <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
+      <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
         <div class="section-title-wrap" v-reveal>
           <h2 class="section-title">内容精选<span class="title-underline"></span></h2>
@@ -2252,6 +2270,98 @@ function resumeFeaturedAutoplay() {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .featured-card__tag {
     background: rgba(15, 23, 42, 0.9);
+  }
+}
+
+/* ============ 升级：区块质感统一（网格+噪点+淡光斑）与渐变衔接 ============ */
+.section.has-texture {
+  position: relative;
+  overflow: hidden;
+}
+.section.has-texture .container,
+.section.has-texture .guarantee-carousel,
+.section.has-texture .featured-carousel {
+  position: relative;
+  z-index: 1;
+}
+.section.has-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 30%, #000 22%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 50% at 50% 30%, #000 22%, transparent 78%);
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+.section.has-texture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 0;
+}
+.section.has-texture-dark::before {
+  background-image:
+    linear-gradient(to right, var(--hero-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hero-grid-line) 1px, transparent 1px);
+  opacity: 0.5;
+}
+.section.has-texture-dark::after {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+.light-aurora,
+.dark-aurora {
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  z-index: 0;
+}
+.light-aurora__blob {
+  position: absolute;
+  width: 36vw;
+  height: 36vw;
+  left: 18%;
+  top: -8%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.10) 0%, transparent 65%);
+  border-radius: 50%;
+  filter: blur(60px);
+}
+.dark-aurora__blob {
+  position: absolute;
+  width: 40vw;
+  height: 40vw;
+  left: 12%;
+  top: -12%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.22) 0%, transparent 65%);
+  border-radius: 50%;
+  filter: blur(70px);
+}
+.section-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent 0%, var(--next-bg) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .light-aurora__blob,
+  .dark-aurora__blob {
+    display: none;
+  }
+  .section.has-texture::before,
+  .section.has-texture::after {
+    opacity: 0.3;
   }
 }
 </style>
