@@ -114,7 +114,7 @@ h1, h2, h3, h4, h5, h6 {
   background-size: var(--grid-size) var(--grid-size);
 }
 
-/* 噪点纹理（内联 SVG data-URI，叠加在深色区消解"平板感"） */
+/* 噪点纹理（--noise-url 内联 SVG，叠加在深色区消解"平板感"） */
 .bg-noise {
   position: relative;
 }
@@ -124,7 +124,7 @@ h1, h2, h3, h4, h5, h6 {
   inset: 0;
   pointer-events: none;
   opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: var(--noise-url);
 }
 
 /* 玻璃拟态卡片基类（不支持 backdrop-filter 的浏览器自动回退为半透明实色） */
@@ -163,6 +163,183 @@ h1, h2, h3, h4, h5, h6 {
 
 .animate-fade-in {
   animation: fadeIn var(--duration-normal) var(--ease-default) both;
+}
+
+/* ============ 首页板块共享样式（板块组件与 index.vue 共用） ============ */
+
+/* 页面容器 */
+.container {
+  max-width: var(--container-page);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+.container.narrow {
+  max-width: var(--container-narrow);
+}
+
+/* Section 通用标题 */
+.section {
+  padding: var(--section-padding) var(--space-6);
+}
+.section-title-wrap {
+  text-align: center;
+  margin-bottom: var(--space-16);
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  margin: 0;
+  position: relative;
+  display: inline-block;
+}
+.title-underline {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 3px;
+  background: linear-gradient(to right, #0EA5E9, #14B8A6);
+  border-radius: 2px;
+}
+.section-subtitle {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-tertiary);
+}
+
+/* 卡片 spotlight 高光层（配合 v-spotlight 指令，三类卡片共用） */
+.service-card::before,
+.coop-card::before,
+.tech-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    360px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(14, 165, 233, 0.09),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-normal);
+  pointer-events: none;
+}
+.service-card:hover::before,
+.coop-card:hover::before,
+.tech-card:hover::before {
+  opacity: 1;
+}
+
+/* 区块质感统一（网格+噪点+淡光斑）与渐变衔接 */
+.section.has-texture {
+  position: relative;
+  overflow: hidden;
+}
+.section.has-texture .container,
+.section.has-texture .guarantee-carousel,
+.section.has-texture .featured-carousel {
+  position: relative;
+  z-index: 1;
+}
+.section.has-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 30%, #000 22%, transparent 78%);
+  mask-image: radial-gradient(ellipse 70% 50% at 50% 30%, #000 22%, transparent 78%);
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+.section.has-texture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--noise-url);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 0;
+}
+.section.has-texture-dark::before {
+  background-image:
+    linear-gradient(to right, var(--hero-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hero-grid-line) 1px, transparent 1px);
+  opacity: 0.5;
+}
+.section.has-texture-dark::after {
+  opacity: 0.55;
+}
+.light-aurora,
+.dark-aurora {
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  z-index: 0;
+}
+.light-aurora__blob {
+  position: absolute;
+  width: 36vw;
+  height: 36vw;
+  left: 18%;
+  top: -8%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.10) 0%, transparent 65%);
+  border-radius: 50%;
+  filter: blur(60px);
+}
+.dark-aurora__blob {
+  position: absolute;
+  width: 40vw;
+  height: 40vw;
+  left: 12%;
+  top: -12%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.22) 0%, transparent 65%);
+  border-radius: 50%;
+  filter: blur(70px);
+}
+.section-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent 0%, var(--next-bg) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+/* 移动端：大尺寸模糊光斑合成开销偏高，隐藏（网格+噪点纹理保留，质感不空） */
+@media (max-width: 639px) {
+  .light-aurora__blob,
+  .dark-aurora__blob {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .section {
+    padding: var(--section-padding-mobile) var(--space-4);
+  }
+  .section-title-wrap {
+    margin-bottom: var(--space-10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .light-aurora__blob,
+  .dark-aurora__blob {
+    display: none;
+  }
+  .section.has-texture::before,
+  .section.has-texture::after {
+    opacity: 0.3;
+  }
 }
 
 /* ============ Scroll Reveal 入场动画 ============ */
@@ -212,13 +389,6 @@ h1, h2, h3, h4, h5, h6 {
   }
   .animate-fade-in-up,
   .animate-fade-in {
-    animation: none !important;
-  }
-  .hero-tagline,
-  .hero-title,
-  .hero-subtitle,
-  .hero-cta {
-    opacity: 1 !important;
     animation: none !important;
   }
   /* 页面切换过渡禁用（保留 opacity 立即切换） */

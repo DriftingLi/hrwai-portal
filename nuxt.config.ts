@@ -14,6 +14,12 @@ export default defineNuxtConfig({
 
   ssr: true,
 
+  // ===== 组件自动导入（home/ 子目录关闭路径前缀，板块组件保持 SiteHero 等原名） =====
+  components: [
+    { path: '~/components/home', pathPrefix: false },
+    '~/components'
+  ],
+
   // ===== 页面切换过渡（过渡类定义在 global.css；prefers-reduced-motion 下禁用） =====
   app: {
     pageTransition: { name: 'page', mode: 'out-in' }
@@ -46,8 +52,22 @@ export default defineNuxtConfig({
     sitemap: '/sitemap.xml'
   },
 
-  // ===== 全局样式（设计令牌 / 基础样式 / 文章正文） =====
+  // ===== 全局样式（自托管字体 → 设计令牌 → 基础样式 → 文章正文） =====
+  // 字体全部自托管（替代 Google Fonts：大陆访问 fonts.googleapis 不稳定且 stylesheet 阻塞渲染）：
+  // - MiSans（小米，免费商用）：简中切片子集（unicode-range 按需加载），字重为 MiSans 自有标度
+  //   （Regular=330/Demibold=450/Bold=630/Heavy=700），浏览器对标准 400/500/600/700 自动就近匹配
+  // - Space Grotesk（OFL）：西文/数字展示字体；JetBrains Mono（OFL）：序号/年份等 mono 点缀
   css: [
+    '@fontsource/space-grotesk/500.css',
+    '@fontsource/space-grotesk/600.css',
+    '@fontsource/space-grotesk/700.css',
+    '@fontsource/jetbrains-mono/500.css',
+    '@fontsource/jetbrains-mono/600.css',
+    '@fontsource/jetbrains-mono/700.css',
+    'misans/lib/Normal/MiSans-Regular.min.css',
+    'misans/lib/Normal/MiSans-Demibold.min.css',
+    'misans/lib/Normal/MiSans-Bold.min.css',
+    'misans/lib/Normal/MiSans-Heavy.min.css',
     '~/assets/css/design-tokens.css',
     '~/assets/css/global.css',
     '~/assets/css/markdown.css'
