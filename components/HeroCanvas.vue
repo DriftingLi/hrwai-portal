@@ -1,5 +1,5 @@
 <template>
-  <canvas v-if="!isStatic" ref="canvasRef" class="hero-canvas" aria-hidden="true"></canvas>
+  <canvas ref="canvasRef" class="hero-canvas" :class="{ 'is-ready': !isStatic }" aria-hidden="true"></canvas>
 </template>
 
 <script setup lang="ts">
@@ -9,8 +9,9 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
  * Hero 粒子连线网络背景（AI 科技感）
  *
  * 渲染策略：
- * - SSR / prefers-reduced-motion / 不支持 canvas：不渲染 canvas，由父级
- *   Hero 区的静态 CSS 光斑层兜底（视觉不空洞）。
+ * - canvas 常驻 DOM（SSR 可渲染空元素），isStatic 期间 opacity 0 隐藏；
+ *   SSR / prefers-reduced-motion / 不支持 canvas 时保持 isStatic，
+ *   由父级 Hero 区的静态 CSS 光斑层兜底（视觉不空洞）。
  * - 客户端激活后：rAF 驱动粒子漂移 + 近距连线，鼠标邻近吸引；
  *   页面不可见（document.hidden）时暂停节能。
  * - 移动端（pointer: coarse）粒子数减半。
@@ -167,14 +168,14 @@ function onVisibility() {
 }
 
 onMounted(() => {
-  if (prefersReducedMotion()) return // 保持 isStatic，父级静态光斑兜底
+  if (prefersReducedMotion()) return // 保持 isStatic：canvas 透明，父级静态光斑兜底
   const canvas = canvasRef.value
   if (!canvas) return
   ctx = canvas.getContext('2d')
   if (!ctx) return
   isStatic.value = false
 
-  // canvas v-if 渲染后需要等一帧才能量到尺寸
+  // 等一帧确保首次布局完成后再量尺寸
   requestAnimationFrame(() => {
     resize()
     rafId = requestAnimationFrame(step)
@@ -203,5 +204,15 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   display: block;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-default);
+}
+.hero-canvas.is-ready {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-canvas {
+    transition: none;
+  }
 }
 </style>
