@@ -523,13 +523,15 @@ const cooperations = [
   }
 ]
 
-/* 卡片图标多色配色（前景色 / 浅底色） */
-const productColors = [
+/* 卡片图标四色配色（前景色 / 浅底色），产品卡与技术卡共用 */
+const palette = [
   { fg: '#0EA5E9', bg: '#F0F9FF' }, // 蓝
   { fg: '#14B8A6', bg: '#F0FDFA' }, // 青
   { fg: '#8B5CF6', bg: '#F5F3FF' }, // 紫
   { fg: '#F59E0B', bg: '#FFFBEB' }  // 橙
 ]
+const productColors = palette
+const techColors = palette
 const coopColors = [
   { fg: '#6366F1', bg: '#EEF2FF' }, // 靛蓝
   { fg: '#F43F5E', bg: '#FFF1F2' }, // 玫红
@@ -569,13 +571,6 @@ const techAdvantages: TechAdvantage[] = [
     icon: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
     metric: '60+ 专利及软著'
   }
-]
-
-const techColors = [
-  { fg: '#0EA5E9', bg: '#F0F9FF' }, // 蓝
-  { fg: '#14B8A6', bg: '#F0FDFA' }, // 青
-  { fg: '#8B5CF6', bg: '#F5F3FF' }, // 紫
-  { fg: '#F59E0B', bg: '#FFFBEB' }  // 橙
 ]
 
 /* ---------- 发展历程（TODO(内容替换): 占位年份与事件待业务确认） ---------- */
@@ -2348,7 +2343,7 @@ function resumeFeaturedAutoplay() {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-image: var(--noise-url);
   opacity: 0.7;
   pointer-events: none;
   z-index: 0;
@@ -2360,8 +2355,7 @@ function resumeFeaturedAutoplay() {
   opacity: 0.5;
 }
 .section.has-texture-dark::after {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-  opacity: 0.5;
+  opacity: 0.55;
 }
 .light-aurora,
 .dark-aurora {

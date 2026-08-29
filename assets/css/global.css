@@ -114,7 +114,7 @@ h1, h2, h3, h4, h5, h6 {
   background-size: var(--grid-size) var(--grid-size);
 }
 
-/* 噪点纹理（内联 SVG data-URI，叠加在深色区消解"平板感"） */
+/* 噪点纹理（--noise-url 内联 SVG，叠加在深色区消解"平板感"） */
 .bg-noise {
   position: relative;
 }
@@ -124,7 +124,7 @@ h1, h2, h3, h4, h5, h6 {
   inset: 0;
   pointer-events: none;
   opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: var(--noise-url);
 }
 
 /* 玻璃拟态卡片基类（不支持 backdrop-filter 的浏览器自动回退为半透明实色） */
@@ -212,13 +212,6 @@ h1, h2, h3, h4, h5, h6 {
   }
   .animate-fade-in-up,
   .animate-fade-in {
-    animation: none !important;
-  }
-  .hero-tagline,
-  .hero-title,
-  .hero-subtitle,
-  .hero-cta {
-    opacity: 1 !important;
     animation: none !important;
   }
   /* 页面切换过渡禁用（保留 opacity 立即切换） */
