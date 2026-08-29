@@ -171,20 +171,39 @@ jobs:
 
       # --------------------------------------------------------
       # Step 3.2: 上传部署文件并执行
+      # （境外 runner → 国内服务器跨境 SSH 链路存在概率性 RST：
+      #   TCP 可建立但握手期被远端关闭（Connection closed），
+      #   对所有 ssh/scp 命令做 5 次重试，间隔 15s）
       # --------------------------------------------------------
       - name: 上传部署文件
         run: |
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+          retry() {
+            for i in 1 2 3 4 5; do
+              if "$@"; then return 0; fi
+              echo "⚠️ 第 $i 次连接失败（跨境 SSH 链路抖动），15s 后重试..."
+              sleep 15
+            done
+            echo "❌ 重试 5 次仍失败"; return 1
+          }
+          retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" "mkdir -p $DEPLOY_PATH/deploy"
-          scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+          retry scp -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             deploy/deploy-portal.sh deploy/docker-compose.portal.yml \
             "target:$DEPLOY_PATH/deploy/"
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+          retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
 
       - name: 执行远程部署
         run: |
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+          retry() {
+            for i in 1 2 3 4 5; do
+              if "$@"; then return 0; fi
+              echo "⚠️ 第 $i 次连接失败（跨境 SSH 链路抖动），15s 后重试..."
+              sleep 15
+            done
+            echo "❌ 重试 5 次仍失败"; return 1
+          }
+          retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" \
             "cd $DEPLOY_PATH && env \
               IMAGE=ghcr.io/${{ github.repository }} \
@@ -206,7 +225,16 @@ jobs:
           (github.event_name == 'push' && github.ref != 'refs/heads/main'))
         run: |
           echo "测试环境部署成功，停止容器以释放资源..."
-          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 \
+          # 非关键步骤：重试 3 次后放弃（不影响部署结果）
+          retry() {
+            for i in 1 2 3; do
+              if "$@"; then return 0; fi
+              echo "⚠️ 第 $i 次连接失败，15s 后重试..."
+              sleep 15
+            done
+            echo "⚠️ 停止容器重试 3 次仍失败，跳过（不影响部署结果）"; return 0
+          }
+          retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" \
             "cd $DEPLOY_PATH && docker compose -f docker-compose.portal.yml down 2>&1 || true"
           echo "✅ 测试环境容器已停止"
