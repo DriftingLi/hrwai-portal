@@ -1,7 +1,7 @@
 <template>
   <div class="portal-home">
     <!-- ===== Hero ===== -->
-    <section id="hero" class="hero" @mousemove="onHeroMouseMove">
+    <section id="hero" ref="heroSectionRef" class="hero" @mousemove="onHeroMouseMove">
       <img src="/images/hero-bg.webp" alt="" class="hero-bg" fetchpriority="high" />
       <!-- 极光光斑层：SSR 静态兜底 + 桌面端鼠标视差 -->
       <div class="hero-aurora" :style="auroraStyle" aria-hidden="true">
@@ -256,7 +256,7 @@
     </section>
 
     <!-- ===== Service Guarantee ===== -->
-    <section id="service" class="section service-guarantee has-texture has-texture-dark has-fade" style="--next-bg: var(--color-bg-page)" v-reveal>
+    <section id="service" ref="guaranteeSectionRef" class="section service-guarantee has-texture has-texture-dark has-fade" style="--next-bg: var(--color-bg-page)" v-reveal>
       <div class="dark-aurora" aria-hidden="true"><div class="dark-aurora__blob"></div></div>
       <div class="section-fade" aria-hidden="true"></div>
       <div class="container guarantee-carousel">
@@ -316,7 +316,7 @@
     </section>
 
     <!-- ===== Featured 内容精选 ===== -->
-    <section id="featured" class="section featured-section has-texture has-texture-light has-fade" style="--next-bg: #0EA5E9" v-if="featuredList.length">
+    <section id="featured" ref="featuredSectionRef" class="section featured-section has-texture has-texture-light has-fade" style="--next-bg: #0EA5E9" v-if="featuredList.length">
       <div class="light-aurora" aria-hidden="true"><div class="light-aurora__blob"></div></div>
       <div class="section-fade" aria-hidden="true"></div>
       <div class="container">
@@ -411,13 +411,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { categoryLabel } from '~/api/featured'
 import { resolveFileUrl } from '~/utils/fileUrl'
 import { formatDate } from '~/utils/formatDate'
 import { externalMallUrl } from '~/config/links'
 import { useSiteLinks } from '~/composables/useSiteLinks'
 import { useFeaturedApi } from '~/composables/useFeaturedApi'
+import { useInViewport } from '~/composables/useInViewport'
 
 type ModuleKey = 'training' | 'valuation' | 'ai-assistant' | 'trade'
 
@@ -685,6 +686,30 @@ onBeforeUnmount(() => {
   stopAutoplay()
   stopFeaturedAutoplay()
   cancelAnimationFrame(parallaxRaf)
+})
+
+/* ---------- 离屏暂停：Hero 视差 / 两个轮播的自动播放 ---------- */
+const heroSectionRef = ref<HTMLElement | null>(null)
+const guaranteeSectionRef = ref<HTMLElement | null>(null)
+const featuredSectionRef = ref<HTMLElement | null>(null)
+const { isActive: heroVisible } = useInViewport(heroSectionRef)
+const { isActive: guaranteeVisible } = useInViewport(guaranteeSectionRef)
+const { isActive: featuredVisible } = useInViewport(featuredSectionRef)
+
+// Hero 视差 rAF：离屏停帧、回屏恢复
+watch(heroVisible, (visible) => {
+  if (!parallaxEnabled) return
+  cancelAnimationFrame(parallaxRaf)
+  if (visible) parallaxRaf = requestAnimationFrame(parallaxLoop)
+})
+// 轮播自动播放：离屏停止、回屏恢复（reduced-motion/悬停暂停仍由 start* 内部判断）
+watch(guaranteeVisible, (visible) => {
+  if (visible) startAutoplay()
+  else stopAutoplay()
+})
+watch(featuredVisible, (visible) => {
+  if (visible) startFeaturedAutoplay()
+  else stopFeaturedAutoplay()
 })
 
 function scrollTo(id: string) {
@@ -2374,6 +2399,13 @@ function resumeFeaturedAutoplay() {
   background: linear-gradient(to bottom, transparent 0%, var(--next-bg) 100%);
   pointer-events: none;
   z-index: 1;
+}
+/* 移动端：大尺寸模糊光斑合成开销偏高，隐藏（网格+噪点纹理保留，质感不空） */
+@media (max-width: 639px) {
+  .light-aurora__blob,
+  .dark-aurora__blob {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .light-aurora__blob,
