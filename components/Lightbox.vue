@@ -3,6 +3,7 @@
     <Transition name="lightbox">
       <div
         v-if="visible"
+        ref="maskRef"
         class="lightbox-mask"
         role="dialog"
         aria-modal="true"
@@ -16,7 +17,7 @@
         <button v-if="images.length > 1" class="lb-nav lb-next" aria-label="下一张" @click.stop="step(1)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
-        <button class="lb-close" aria-label="关闭" @click.stop="close">
+        <button ref="closeBtnRef" class="lb-close" aria-label="关闭" @click.stop="close">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
         <span v-if="images.length > 1" class="lb-counter">{{ index + 1 }} / {{ images.length }}</span>
@@ -26,27 +27,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 /**
  * 正文图片灯箱：收集 .markdown-body img，点击放大；ESC / 遮罩 / 关闭按钮退出，
  * 多图支持左右切换（含键盘方向键）。
+ * 焦点管理：打开时焦点移入对话框（Tab 在控件间循环），关闭后还原到触发元素。
  */
 
 const visible = ref(false)
 const images = ref<string[]>([])
 const index = ref(0)
+const maskRef = ref<HTMLElement | null>(null)
+const closeBtnRef = ref<HTMLButtonElement | null>(null)
+let lastFocused: HTMLElement | null = null
 
 function open(src: string, list: string[], idx: number) {
   images.value = list
   index.value = idx
+  lastFocused = document.activeElement as HTMLElement | null
   visible.value = true
   document.body.style.overflow = 'hidden'
+  nextTick(() => closeBtnRef.value?.focus())
 }
 
 function close() {
   visible.value = false
   document.body.style.overflow = ''
+  lastFocused?.focus()
+  lastFocused = null
 }
 
 function step(delta: number) {
@@ -54,9 +63,35 @@ function step(delta: number) {
   index.value = (index.value + delta + images.value.length) % images.value.length
 }
 
+// Tab 焦点圈定：在对话框内控件间循环，防止焦点穿透到背景页面
+function trapTab(e: KeyboardEvent) {
+  const mask = maskRef.value
+  if (!mask) return
+  const focusables = Array.from(mask.querySelectorAll<HTMLElement>('button:not([disabled])'))
+  if (focusables.length === 0) return
+  const first = focusables[0]!
+  const last = focusables[focusables.length - 1]!
+  const active = document.activeElement
+  const inside = active instanceof Node && mask.contains(active)
+  if (e.shiftKey && (active === first || !inside)) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && (active === last || !inside)) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 function onKeydown(e: KeyboardEvent) {
   if (!visible.value) return
-  if (e.key === 'Escape') close()
+  if (e.key === 'Escape') {
+    close()
+    return
+  }
+  if (e.key === 'Tab') {
+    trapTab(e)
+    return
+  }
   if (e.key === 'ArrowLeft') step(-1)
   if (e.key === 'ArrowRight') step(1)
 }
