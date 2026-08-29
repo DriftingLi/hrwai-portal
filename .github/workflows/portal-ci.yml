@@ -203,9 +203,10 @@ jobs:
             done
             echo "❌ 重试 5 次仍失败"; return 1
           }
+          # chmod 并入同一条连接执行，减少跨境 SSH 握手次数（每多一条连接多一次被 RST 的机会）
           retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" \
-            "cd $DEPLOY_PATH && env \
+            "cd $DEPLOY_PATH && chmod +x deploy/deploy-portal.sh && env \
               IMAGE=ghcr.io/${{ github.repository }} \
               IMAGE_TAG=$IMAGE_TAG \
               GITHUB_TOKEN=$GITHUB_TOKEN \
