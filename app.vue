@@ -81,17 +81,8 @@ if (siteBase) {
   })
 }
 
-// Google Fonts（与现网一致：DM Sans + Noto Sans SC + JetBrains Mono）
-useHead({
-  link: [
-    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-    {
-      rel: 'stylesheet',
-      href: 'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap'
-    }
-  ]
-})
+// 字体改为自托管（nuxt.config css 数组引入 Space Grotesk / MiSans / JetBrains Mono），
+// 不再请求 Google Fonts（大陆访问不稳定，且 stylesheet 链接阻塞渲染）。
 </script>
 
 <style scoped>

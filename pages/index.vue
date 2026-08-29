@@ -1267,7 +1267,7 @@ function resumeFeaturedAutoplay() {
   border: 1px solid var(--color-border);
 }
 .stat-number {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: var(--text-4xl);
   font-weight: var(--font-bold);
   color: var(--color-primary-500);
@@ -1553,7 +1553,7 @@ function resumeFeaturedAutoplay() {
   border-color: var(--color-primary-400);
 }
 .gc-pagination {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--color-text-muted);
   letter-spacing: 0.1em;
@@ -2039,6 +2039,7 @@ function resumeFeaturedAutoplay() {
   margin: 0 0 var(--space-6);
 }
 .tech-metric {
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   letter-spacing: 0.02em;
@@ -2099,7 +2100,7 @@ function resumeFeaturedAutoplay() {
   border-color: var(--color-primary-300);
 }
 .timeline-year {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   line-height: 1;
