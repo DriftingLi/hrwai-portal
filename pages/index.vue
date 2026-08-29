@@ -638,8 +638,18 @@ function carouselPrev() {
   carouselIndex.value = (carouselIndex.value - 1 + guarantees.length) % guarantees.length
 }
 
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
 function startAutoplay() {
   stopAutoplay()
+  // 无障碍：用户请求减少动画时不自动轮播（手动箭头仍可用）
+  if (prefersReducedMotion()) return
   if (autoplayPaused.value) return
   autoplayTimer = setInterval(carouselNext, AUTOPLAY_INTERVAL)
 }
@@ -925,6 +935,8 @@ function featuredAutoplayNext() {
 
 function startFeaturedAutoplay() {
   stopFeaturedAutoplay()
+  // 无障碍：用户请求减少动画时不自动轮播（手动箭头仍可用）
+  if (prefersReducedMotion()) return
   if (featuredAutoplayPaused || featuredList.value.length <= 1) return
   featuredAutoplayTimer = setInterval(featuredAutoplayNext, FEATURED_AUTOPLAY_INTERVAL)
 }
@@ -2178,6 +2190,14 @@ function resumeFeaturedAutoplay() {
   .gc-progress-bar {
     animation: none !important;
     transform: none;
+  }
+  /* 卡片切换过渡降级为直接切换 */
+  .gc-card-enter-active,
+  .gc-card-leave-active {
+    transition: none !important;
+  }
+  .featured-track {
+    scroll-behavior: auto !important;
   }
 }
 

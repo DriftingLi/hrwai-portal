@@ -150,7 +150,10 @@ function onMouseMove(e: MouseEvent) {
   mouseX = e.clientX - rect.left
   mouseY = e.clientY - rect.top
 }
-function onMouseLeave() {
+function onMouseLeave(e: MouseEvent) {
+  // mouseout 会从任意子元素冒泡到 window：仅当指针真正离开窗口（relatedTarget 为空）时重置，
+  // 否则跨元素移动会频繁清空鼠标坐标，导致吸引连线闪烁
+  if (e.relatedTarget) return
   mouseX = -9999
   mouseY = -9999
 }
