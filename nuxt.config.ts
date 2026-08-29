@@ -14,6 +14,12 @@ export default defineNuxtConfig({
 
   ssr: true,
 
+  // ===== 组件自动导入（home/ 子目录关闭路径前缀，板块组件保持 SiteHero 等原名） =====
+  components: [
+    { path: '~/components/home', pathPrefix: false },
+    '~/components'
+  ],
+
   // ===== 页面切换过渡（过渡类定义在 global.css；prefers-reduced-motion 下禁用） =====
   app: {
     pageTransition: { name: 'page', mode: 'out-in' }
