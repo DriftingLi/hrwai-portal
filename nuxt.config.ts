@@ -10,7 +10,7 @@ const siteUrl = buildSiteUrl('/', process.env.PORTAL_SITE_URL || '').replace(/\/
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-01',
 
-  modules: ['@nuxtjs/sitemap', '@nuxtjs/robots', 'motion-v/nuxt'],
+  modules: ['@nuxtjs/sitemap', '@nuxtjs/robots'],
 
   ssr: true,
 

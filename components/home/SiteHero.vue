@@ -12,58 +12,26 @@
       <HeroCanvas />
     </ClientOnly>
     <div class="hero-overlay" aria-hidden="true"></div>
-    <MotionConfig :reducedMotion="'user'">
-      <div class="hero-content">
-        <Motion
-          tag="span"
-          class="hero-badge"
-          :initial="{ opacity: 0, y: 18 }"
-          :animate="{ opacity: 1, y: 0 }"
-          :transition="{ duration: 0.5, ease: 'easeOut' }"
-        >
-          AI × 叉车全生命周期
-        </Motion>
-        <Motion
-          tag="h1"
-          class="hero-title"
-          :initial="{ opacity: 0, y: 26 }"
-          :animate="{ opacity: 1, y: 0 }"
-          :transition="{ duration: 0.55, delay: 0.12, ease: 'easeOut' }"
-        >
-          和润天下 <span class="text-gradient">HRWAI</span>
-        </Motion>
-        <Motion
-          tag="p"
-          class="hero-subtitle"
-          :initial="{ opacity: 0, y: 26 }"
-          :animate="{ opacity: 1, y: 0 }"
-          :transition="{ duration: 0.55, delay: 0.24, ease: 'easeOut' }"
-        >
-          和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
-          驱动叉车全生命周期智能化升级。
-        </Motion>
-        <Motion
-          class="hero-cta"
-          :initial="{ opacity: 0, y: 26 }"
-          :animate="{ opacity: 1, y: 0 }"
-          :transition="{ duration: 0.55, delay: 0.36, ease: 'easeOut' }"
-        >
-          <a href="#about" class="btn-primary" @click.prevent="scrollToId('about')">了解我们</a>
-          <a href="#products" class="btn-outline" @click.prevent="scrollToId('products')">核心服务</a>
-        </Motion>
+    <div class="hero-content">
+      <!-- 入场 stagger 为纯 CSS 动画：随首帧 paint 立即播放，不等待 JS 水合 -->
+      <span class="hero-badge hero-in hero-in--1">AI × 叉车全生命周期</span>
+      <h1 class="hero-title hero-in hero-in--2">
+        和润天下 <span class="text-gradient">HRWAI</span>
+      </h1>
+      <p class="hero-subtitle hero-in hero-in--3">
+        和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
+        驱动叉车全生命周期智能化升级。
+      </p>
+      <div class="hero-cta hero-in hero-in--4">
+        <a href="#about" class="btn-primary" @click.prevent="scrollToId('about')">了解我们</a>
+        <a href="#products" class="btn-outline" @click.prevent="scrollToId('products')">核心服务</a>
       </div>
-      <!-- 向下探索指示器 -->
-      <Motion
-        class="hero-scroll-hint"
-        aria-hidden="true"
-        :initial="{ opacity: 0 }"
-        :animate="{ opacity: 1 }"
-        :transition="{ duration: 0.6, delay: 0.9 }"
-      >
-        <div class="mouse-icon"><span class="mouse-wheel"></span></div>
-        <span class="hero-scroll-text">向下探索</span>
-      </Motion>
-    </MotionConfig>
+    </div>
+    <!-- 向下探索指示器 -->
+    <div class="hero-scroll-hint hero-in hero-in--5" aria-hidden="true">
+      <div class="mouse-icon"><span class="mouse-wheel"></span></div>
+      <span class="hero-scroll-text">向下探索</span>
+    </div>
     <!-- 底部渐隐：深色 Hero 无缝过渡到浅色内容区 -->
     <div class="hero-fade" aria-hidden="true"></div>
   </section>
@@ -256,6 +224,25 @@ onBeforeUnmount(() => {
   gap: var(--space-4);
   justify-content: center;
   flex-wrap: wrap;
+}
+/* 入场 stagger：纯 CSS 动画，随首帧 paint 立即播放，不依赖 JS 水合 */
+.hero-in {
+  animation: heroIn 0.55s var(--ease-out) both;
+}
+.hero-in--1 { animation-delay: 0s; }
+.hero-in--2 { animation-delay: 0.12s; }
+.hero-in--3 { animation-delay: 0.24s; }
+.hero-in--4 { animation-delay: 0.36s; }
+.hero-in--5 { animation-duration: 0.6s; animation-delay: 0.9s; }
+@keyframes heroIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .btn-primary {
   display: inline-flex;

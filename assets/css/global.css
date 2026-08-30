@@ -396,9 +396,12 @@ h1, h2, h3, h4, h5, h6 {
   .page-leave-active {
     transition: none !important;
   }
-  /* Hero 装饰动画禁用 */
+  /* Hero 装饰动画禁用（含入场 stagger，直接显示最终状态） */
   .aurora-blob,
   .mouse-wheel {
+    animation: none !important;
+  }
+  .hero-in {
     animation: none !important;
   }
 }
