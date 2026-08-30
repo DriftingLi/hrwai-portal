@@ -68,6 +68,10 @@ export default defineNuxtConfig({
     'misans/lib/Normal/MiSans-Demibold.min.css',
     'misans/lib/Normal/MiSans-Bold.min.css',
     'misans/lib/Normal/MiSans-Heavy.min.css',
+    // hero 首屏关键字体子集（scripts/gen-hero-fonts.mjs 生成）：声明在包字体之后，
+    // 同码点后声明者生效——hero 文案码点改走稳定 URL 子集（public/fonts/hero/，
+    // 由 SiteHero preload），其余码点仍由上面的包字体按需加载
+    '~/assets/css/hero-fonts.css',
     '~/assets/css/design-tokens.css',
     '~/assets/css/global.css',
     '~/assets/css/markdown.css'
