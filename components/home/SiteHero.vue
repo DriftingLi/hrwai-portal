@@ -8,9 +8,8 @@
       <div class="aurora-blob aurora-blob--3"></div>
     </div>
     <div class="hero-grid bg-grid" aria-hidden="true"></div>
-    <ClientOnly>
-      <HeroCanvas />
-    </ClientOnly>
+    <!-- 粒子画布：SSR 常驻渲染，由内联脚本（heroParticlesScript）随 HTML 解析驱动 -->
+    <canvas id="hero-canvas" class="hero-canvas" aria-hidden="true"></canvas>
     <div class="hero-overlay" aria-hidden="true"></div>
     <div class="hero-content">
       <!-- 入场 stagger 为纯 CSS 动画：随首帧 paint 立即播放，不等待 JS 水合 -->
@@ -42,6 +41,23 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { scrollToId } from '~/utils/scroll'
 import { prefersReducedMotion } from '~/utils/motion'
 import { useInViewport } from '~/composables/useInViewport'
+import { heroFontPreloads } from '~/config/heroFonts'
+import { heroParticlesScript } from '~/utils/heroParticlesScript'
+
+/* ---------- 首屏关键资源：hero 字体子集 preload + 粒子内联脚本 ---------- */
+// 字体子集（assets/css/hero-fonts.css 覆盖声明对应）随 HTML 并行加载，
+// 首帧 paint 即用真实字体，消除 swap 二次闪变。
+// 粒子脚本内联注入：随 HTML 解析即运行，不等 Vue 水合（canvas 为 SSR 常驻元素）。
+useHead({
+  link: heroFontPreloads.map((href) => ({
+    rel: 'preload',
+    as: 'font',
+    type: 'font/woff2',
+    href,
+    crossorigin: 'anonymous'
+  })),
+  script: [{ key: 'hero-particles', innerHTML: heroParticlesScript }]
+})
 
 /* ---------- Hero 极光层鼠标视差（仅桌面精准指针 + 未开启减少动画） ---------- */
 const heroSectionRef = ref<HTMLElement | null>(null)
@@ -158,6 +174,24 @@ onBeforeUnmount(() => {
   inset: 0;
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 25%, transparent 78%);
   mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, #000 25%, transparent 78%);
+}
+/* 粒子画布：内联脚本驱动（utils/heroParticlesScript），首帧绘制后淡入 */
+.hero-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-default);
+}
+.hero-canvas.is-ready {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-canvas {
+    transition: none;
+  }
 }
 .hero-overlay {
   position: absolute;
