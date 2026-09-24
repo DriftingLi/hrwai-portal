@@ -20,3 +20,6 @@ deploy/portal.nginx.split.conf
 
 # ===== 计划与临时文档（本地协作产物，不入版本库） =====
 .zcode/
+
+# ===== WorkBuddy 工作区数据（记忆、会话产物） =====
+.workbuddy/
