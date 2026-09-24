@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>易道网络科技（广东）有限公司</title>
+  <meta name="description" content="易道网络科技（广东）有限公司 —— 人工智能应用软件开发、大数据服务、信息系统集成与运行维护、物联网技术研发等综合软件与信息技术服务提供商。" />
+  <style>
+    :root {
+      --primary: #1d4ed8;
+      --primary-dark: #1e3a8a;
+      --text: #1f2937;
+      --text-muted: #6b7280;
+      --bg: #ffffff;
+      --bg-soft: #f5f7fa;
+      --border: #e5e7eb;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.7;
+    }
+    a { text-decoration: none; color: inherit; }
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== Header ===== */
+    .header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
+    .logo-mark {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), #38bdf8);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 800;
+    }
+    .nav { display: flex; gap: 32px; font-size: 15px; }
+    .nav a { color: var(--text-muted); transition: color .2s; }
+    .nav a:hover { color: var(--primary); }
+
+    /* ===== Hero ===== */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      text-align: center;
+      color: #fff;
+      padding: 104px 24px 128px;
+      background:
+        radial-gradient(900px 520px at 12% 8%, rgba(56, 189, 248, .38), transparent 62%),
+        radial-gradient(760px 460px at 88% 18%, rgba(129, 140, 248, .40), transparent 64%),
+        radial-gradient(600px 380px at 50% 110%, rgba(37, 99, 235, .55), transparent 70%),
+        linear-gradient(135deg, #0f2a6b 0%, #1e3a8a 45%, #1d4ed8 100%);
+    }
+    /* 细网格纹理（中心清晰、四周渐隐） */
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      -webkit-mask-image: radial-gradient(72% 62% at 50% 42%, #000 35%, transparent 100%);
+      mask-image: radial-gradient(72% 62% at 50% 42%, #000 35%, transparent 100%);
+      pointer-events: none;
+    }
+    .hero > * { position: relative; z-index: 1; }
+
+    .hero-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 999px;
+      font-size: 13px; letter-spacing: .5px;
+      color: #dbeafe;
+      background: rgba(255, 255, 255, .10);
+      border: 1px solid rgba(255, 255, 255, .22);
+      backdrop-filter: blur(6px);
+      margin-bottom: 22px;
+    }
+    .hero-tag::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%;
+      background: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, .25);
+    }
+    .hero h1 {
+      font-size: 46px; font-weight: 800; letter-spacing: 3px; line-height: 1.25;
+      margin-bottom: 14px;
+      background: linear-gradient(180deg, #ffffff 25%, #bcd0ff 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 8px 28px rgba(8, 24, 68, .35);
+    }
+    .hero .slogan-en {
+      font-size: 12px; letter-spacing: 5px; text-transform: uppercase;
+      color: rgba(255, 255, 255, .55); margin-bottom: 28px;
+    }
+    .hero-desc {
+      font-size: 17.5px; line-height: 1.8;
+      color: rgba(255, 255, 255, .82);
+      max-width: 680px; margin: 0 auto 30px;
+    }
+    .hero-chips {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+      margin-bottom: 40px;
+    }
+    .hero-chips span {
+      padding: 7px 16px; border-radius: 8px;
+      font-size: 13.5px; color: #e0eaff;
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid rgba(255, 255, 255, .16);
+      transition: background .2s, transform .2s;
+    }
+    .hero-chips span:hover {
+      background: rgba(255, 255, 255, .18); transform: translateY(-2px);
+    }
+    .hero-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 13px 34px; border-radius: 8px;
+      font-size: 15.5px; transition: transform .2s, box-shadow .2s, background .2s;
+    }
+    .btn-light {
+      background: #fff; color: var(--primary-dark); font-weight: 700;
+      box-shadow: 0 10px 24px rgba(8, 24, 68, .28);
+    }
+    .btn-light:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(8, 24, 68, .36); }
+    .btn-ghost {
+      color: #fff; font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, .38);
+      background: rgba(255, 255, 255, .06);
+    }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .16); transform: translateY(-2px); }
+
+    /* 底部波浪：与下方白色内容区自然衔接 */
+    .hero-wave {
+      position: absolute; left: 0; right: 0; bottom: -1px; z-index: 2;
+      width: 100%; height: 72px; display: block;
+    }
+
+    /* 入场动画 */
+    @keyframes heroIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .hero .hero-tag   { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) both; }
+    .hero h1          { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) .08s both; }
+    .hero .slogan-en  { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) .16s both; }
+    .hero-desc        { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) .24s both; }
+    .hero-chips       { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) .32s both; }
+    .hero-actions     { animation: heroIn .7s cubic-bezier(.2, .7, .3, 1) .40s both; }
+    @media (prefers-reduced-motion: reduce) {
+      .hero .hero-tag, .hero h1, .hero .slogan-en,
+      .hero-desc, .hero-chips, .hero-actions { animation: none; }
+    }
+
+    /* ===== Section ===== */
+    .section { padding: 80px 0; }
+    .section.soft { background: var(--bg-soft); }
+    .section-title { text-align: center; margin-bottom: 48px; }
+    .section-title h2 { font-size: 28px; font-weight: 700; }
+    .section-title .bar {
+      width: 48px; height: 4px; border-radius: 2px;
+      background: var(--primary); margin: 14px auto 0;
+    }
+    .section-title p { color: var(--text-muted); margin-top: 14px; font-size: 15px; }
+
+    /* ===== About ===== */
+    .about-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; max-width: 560px; margin: 0 auto; }
+    .stat-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 10px;
+      padding: 28px 20px; text-align: center;
+    }
+    .stat-card .num { font-size: 24px; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+    .stat-card .label { font-size: 14px; color: var(--text-muted); }
+    .about-text { margin-top: 36px; text-align: center; color: var(--text-muted); max-width: 860px; margin-left: auto; margin-right: auto; font-size: 15.5px; }
+
+    /* ===== Business ===== */
+    .biz-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .biz-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 10px;
+      padding: 32px 26px; transition: transform .2s, box-shadow .2s;
+    }
+    .biz-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(29, 78, 216, .12); }
+    .biz-icon {
+      width: 48px; height: 48px; border-radius: 10px;
+      background: #eef2ff; display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 18px;
+    }
+    .biz-card h3 { font-size: 17px; margin-bottom: 10px; }
+    .biz-card p { font-size: 14px; color: var(--text-muted); }
+
+    /* ===== Footer ===== */
+    .footer {
+      background: #0f172a; color: #94a3b8;
+      text-align: center; padding: 32px 24px; font-size: 13.5px;
+    }
+    .footer .company { color: #cbd5e1; margin-bottom: 8px; }
+    .footer a { color: #94a3b8; }
+    .footer a:hover { color: #fff; }
+
+    @media (max-width: 768px) {
+      .nav { display: none; }
+      .hero { padding: 72px 20px 88px; }
+      .hero h1 { font-size: 29px; letter-spacing: 1.5px; }
+      .hero .slogan-en { font-size: 10px; letter-spacing: 3px; }
+      .hero-desc { font-size: 15px; }
+      .hero-actions .btn { padding: 11px 26px; font-size: 14.5px; }
+      .about-grid { grid-template-columns: repeat(2, 1fr); }
+      .biz-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="container header-inner">
+      <a class="logo" href="#">
+        <span class="logo-mark">易</span>
+        易道网络科技
+      </a>
+      <nav class="nav">
+        <a href="#about">关于我们</a>
+        <a href="#business">业务范围</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-tag">广州 · 黄埔 · 中新智慧一街</span>
+    <h1>易道网络科技（广东）有限公司</h1>
+    <p class="slogan-en">YIDAO NETWORK TECHNOLOGY (GUANGDONG) CO., LTD.</p>
+    <p class="hero-desc">以人工智能、大数据与云计算为核心，提供软件研发、信息系统集成与运行维护等全方位信息技术服务。</p>
+    <div class="hero-chips">
+      <span>人工智能应用</span>
+      <span>大数据服务</span>
+      <span>云计算</span>
+      <span>物联网技术</span>
+      <span>信息系统集成</span>
+    </div>
+    <div class="hero-actions">
+      <a class="btn btn-light" href="#business">了解我们的业务</a>
+      <a class="btn btn-ghost" href="#about">关于我们</a>
+    </div>
+    <svg class="hero-wave" viewBox="0 0 1440 72" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,34 C220,66 420,6 720,26 C1020,46 1230,18 1440,38 L1440,72 L0,72 Z" fill="#ffffff" />
+    </svg>
+  </section>
+
+  <!-- About -->
+  <section class="section" id="about">
+    <div class="container">
+      <div class="section-title">
+        <h2>关于我们</h2>
+        <div class="bar"></div>
+        <p>立足广州黄埔，面向全国的高新技术服务企业</p>
+      </div>
+      <div class="about-grid">
+        <div class="stat-card">
+          <div class="num">2026</div>
+          <div class="label">公司成立年份</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">广州黄埔</div>
+          <div class="label">公司所在地</div>
+        </div>
+      </div>
+      <p class="about-text">
+        易道网络科技（广东）有限公司成立于 2026 年 8 月，坐落于广州市黄埔区中新智慧一街。公司专注于人工智能应用软件开发、区块链技术相关软件和服务、大数据与云计算装备技术服务等领域，同时涵盖安全技术咨询、物联网技术研发、市场营销策划及货物与技术进出口等综合业务，致力于为企业客户提供稳定、专业、可信赖的软件与信息技术解决方案。
+      </p>
+    </div>
+  </section>
+
+  <!-- Business -->
+  <section class="section soft" id="business">
+    <div class="container">
+      <div class="section-title">
+        <h2>业务范围</h2>
+        <div class="bar"></div>
+        <p>覆盖软件研发、数据智能、系统集成与技术服务等多个方向</p>
+      </div>
+      <div class="biz-grid">
+        <div class="biz-card">
+          <div class="biz-icon">🤖</div>
+          <h3>人工智能应用软件开发</h3>
+          <p>人工智能行业应用系统集成、人工智能通用应用系统、人工智能双创服务平台、人工智能基础资源与技术平台建设。</p>
+        </div>
+        <div class="biz-card">
+          <div class="biz-icon">🛡️</div>
+          <h3>智能控制系统集成</h3>
+          <p>智能控制系统集成、卫星技术综合应用系统集成、卫星导航多模增强应用服务系统集成等智能化解决方案。</p>
+        </div>
+        <div class="biz-card">
+          <div class="biz-icon">📊</div>
+          <h3>大数据与数据处理</h3>
+          <p>卫星遥感数据处理、数据处理和存储支持服务、大数据服务、工业互联网数据服务，助力企业数字化升级。</p>
+        </div>
+        <div class="biz-card">
+          <div class="biz-icon">☁️</div>
+          <h3>云计算与网络技术</h3>
+          <p>云计算装备技术服务、5G 通信技术服务、物联网技术研发、网络与信息安全软件开发。</p>
+        </div>
+        <div class="biz-card">
+          <div class="biz-icon">🖥️</div>
+          <h3>信息系统集成与运维</h3>
+          <p>信息系统运行维护服务、信息系统集成服务、信息技术咨询服务，保障业务系统稳定高效运行。</p>
+        </div>
+        <div class="biz-card">
+          <div class="biz-icon">🌐</div>
+          <h3>贸易与营销服务</h3>
+          <p>货物进出口、技术进出口、国内贸易代理、互联网销售、市场营销策划、广告设计与代理、图文设计制作。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p class="company">易道网络科技（广东）有限公司</p>
+    <p>© 2026 | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer">粤ICP备2026005936号-1</a></p>
+  </footer>
+
+</body>
+</html>

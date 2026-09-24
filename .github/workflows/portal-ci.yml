@@ -1,15 +1,16 @@
-# ===== 官网门户 CI/CD =====
+# ===== 官网门户 CI/CD（临时静态站版） =====
+# 当前对外站点为单页静态 HTML：yidao-static-site/index.html
+#   - 不再构建/推送 Nuxt 镜像，部署改为：上传 HTML → nginx 静态容器（host 网络 127.0.0.1:3000）
+#   - 宿主机 FL nginx 反代 www 域名的配置无需改动
 # 触发策略：
-#   - 任意分支 push        → check + build + 自动部署 testing（验证通过后 PR 进 main）
+#   - 任意分支 push        → check + 自动部署 testing（验证通过后 PR 进 main）
 #   - PR 进 main            → check（分支保护要求）
-#   - main push（PR 合并后）→ check + build + 自动部署 production
+#   - main push（PR 合并后）→ check + 自动部署 production
 #   - workflow_dispatch    → 手动部署（可指定 environment / ref）
-# 使用前需配置的 Secrets / Variables（详见 README「部署」）：
-#   仓库级 Secrets: PORTAL_SITE_URL / NUXT_PUBLIC_BAIDU_VERIFICATION(可选)
-#   环境级 Secrets (production / testing): SSH_HOST / SSH_PORT / SSH_USER /
-#                  SSH_PRIVATE_KEY / NUXT_API_INTERNAL_BASE
+# 使用前需配置的 Secrets / Variables：
+#   环境级 Secrets (production / testing): SSH_HOST / SSH_PORT / SSH_USER / SSH_PRIVATE_KEY
 #          production=pve-02 宿主机直连；testing=pve-01 宿主机直连
-#   仓库级 Variables: REGISTRY_PROXY=127.0.0.1:5000 / KEEP_IMAGES=3
+#   仓库级 Variables（可选）: NGINX_IMAGE（默认 nginx:1.27-alpine）
 name: portal-ci
 
 on:
@@ -37,13 +38,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_PORTAL: ghcr.io/${{ github.repository }}
   DEPLOY_PATH: /opt/hrwai-portal
+  SITE_DIR: /opt/hrwai-portal/site
 
 jobs:
   # ============================================================
-  # Stage 1: 检查（typecheck + test + build）——分支保护要求的 status check
+  # Stage 1: 检查（typecheck + test）——分支保护要求的 status check
+  # 注：静态站不参与部署，此处仅校验仓库内 Nuxt 源码仍可编译通过
   # ============================================================
   check:
     runs-on: ubuntu-latest
@@ -64,94 +65,32 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
-        # 后端公开接口需在构建期可达（预渲染首页 + sitemap 全量文章）；
-        # 不可达时构建不失败，仅精选内容降级为空（见页面实现）
-        run: npm run build
-        env:
-          PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
-          NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
-
   # ============================================================
-  # Stage 2: 构建镜像并推送 ghcr.io（PR 不构建）
-  # ============================================================
-  build:
-    needs: check
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image_tag: ${{ github.event.inputs.ref || github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.ref || github.sha }}
-
-      - name: 登录 GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 提取镜像标签
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PORTAL }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=,format=short
-            type=raw,value=${{ github.event.inputs.ref || github.sha }}
-            type=ref,event=branch
-
-      - name: 构建并推送门户镜像
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            PORTAL_SITE_URL=${{ secrets.PORTAL_SITE_URL }}
-            NUXT_PUBLIC_BAIDU_VERIFICATION=${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
-          provenance: false
-
-  # ============================================================
-  # Stage 3: 通过公网 SSH 直连 PVE 宿主机部署
+  # Stage 2: 通过公网 SSH 直连 PVE 宿主机部署静态站
   #   分支 push → testing；main push → production；手动 → 指定环境
   #   production=pve-02(SSH_HOST:SSH_PORT)、testing=pve-01(SSH_HOST:SSH_PORT)
   #   均为宿主机 Docker 直连，无跳板
   # ============================================================
   deploy:
-    needs: build
+    needs: check
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.environment || 'production') || (github.ref == 'refs/heads/main' && 'production' || 'testing') }}
     env:
-      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-      REGISTRY_PROXY: ${{ vars.REGISTRY_PROXY || '' }}
-      KEEP_IMAGES: ${{ vars.KEEP_IMAGES || '3' }}
-      # 运行期配置（环境级 Secrets 按 environment 自动解析）
-      NUXT_API_INTERNAL_BASE: ${{ secrets.NUXT_API_INTERNAL_BASE }}
-      PORTAL_SITE_URL: ${{ secrets.PORTAL_SITE_URL }}
-      NUXT_PUBLIC_BAIDU_VERIFICATION: ${{ secrets.NUXT_PUBLIC_BAIDU_VERIFICATION }}
+      NGINX_IMAGE: ${{ vars.NGINX_IMAGE || 'nginx:1.27-alpine' }}
       # SSH 连接（公网直连 PVE 宿主机）
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.build.outputs.image_tag }}
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       # --------------------------------------------------------
-      # Step 3.1: 配置 SSH（直连 PVE 宿主机）
+      # Step 2.1: 配置 SSH（直连 PVE 宿主机）
       # --------------------------------------------------------
       - name: 配置 SSH
         run: |
@@ -170,7 +109,7 @@ jobs:
           EOF
 
       # --------------------------------------------------------
-      # Step 3.2: 上传部署文件并执行
+      # Step 2.2: 上传静态站点与编排文件
       # （境外 runner → 国内服务器跨境 SSH 链路存在概率性 RST：
       #   TCP 可建立但握手期被远端关闭（Connection closed），
       #   对所有 ssh/scp 命令做 5 次重试，间隔 15s）
@@ -186,13 +125,21 @@ jobs:
             echo "❌ 重试 5 次仍失败"; return 1
           }
           retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
-            "target" "mkdir -p $DEPLOY_PATH/deploy"
+            "target" "mkdir -p $DEPLOY_PATH/deploy $SITE_DIR"
           retry scp -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
-            deploy/deploy-portal.sh deploy/docker-compose.portal.yml \
+            yidao-static-site/index.html \
+            "target:$SITE_DIR/index.html"
+          retry scp -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
+            deploy/docker-compose.portal-static.yml deploy/nginx.portal.conf deploy/deploy-portal-static.sh \
             "target:$DEPLOY_PATH/deploy/"
           retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
-            "target" "chmod +x $DEPLOY_PATH/deploy/deploy-portal.sh"
+            "target" "chmod +x $DEPLOY_PATH/deploy/deploy-portal-static.sh"
 
+      # --------------------------------------------------------
+      # Step 2.3: 远程启动/替换静态站容器
+      #   - 先移除同名旧容器（可能是上一版 Nuxt 镜像实例），避免占用 127.0.0.1:3000
+      #   - 站点目录为只读挂载，后续仅更新 HTML 即可生效
+      # --------------------------------------------------------
       - name: 执行远程部署
         run: |
           retry() {
@@ -203,22 +150,17 @@ jobs:
             done
             echo "❌ 重试 5 次仍失败"; return 1
           }
-          # chmod 并入同一条连接执行，减少跨境 SSH 握手次数（每多一条连接多一次被 RST 的机会）
+          # env 并入同一条连接执行，减少跨境 SSH 握手次数
           retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" \
-            "cd $DEPLOY_PATH && chmod +x deploy/deploy-portal.sh && env \
-              IMAGE=ghcr.io/${{ github.repository }} \
-              IMAGE_TAG=$IMAGE_TAG \
-              GITHUB_TOKEN=$GITHUB_TOKEN \
-              REGISTRY_PROXY=$REGISTRY_PROXY \
-              KEEP_IMAGES=$KEEP_IMAGES \
-              NUXT_API_INTERNAL_BASE=$NUXT_API_INTERNAL_BASE \
-              PORTAL_SITE_URL=$PORTAL_SITE_URL \
-              NUXT_PUBLIC_BAIDU_VERIFICATION=$NUXT_PUBLIC_BAIDU_VERIFICATION \
-              bash deploy/deploy-portal.sh"
+            "cd $DEPLOY_PATH && env \
+              DEPLOY_PATH=$DEPLOY_PATH \
+              SITE_DIR=$SITE_DIR \
+              PORTAL_STATIC_IMAGE=$NGINX_IMAGE \
+              bash deploy/deploy-portal-static.sh"
 
       # --------------------------------------------------------
-      # Step 3.3: 测试环境部署验证后停止容器，节省资源
+      # Step 2.4: 测试环境部署验证后停止容器，节省资源
       # --------------------------------------------------------
       - name: 测试环境停止容器
         if: success() && (
@@ -237,7 +179,7 @@ jobs:
           }
           retry ssh -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=30 \
             "target" \
-            "cd $DEPLOY_PATH && docker compose -f docker-compose.portal.yml down 2>&1 || true"
+            "cd $DEPLOY_PATH && docker compose -f deploy/docker-compose.portal-static.yml down 2>&1 || true"
           echo "✅ 测试环境容器已停止"
 
       - name: 清理 SSH 密钥
