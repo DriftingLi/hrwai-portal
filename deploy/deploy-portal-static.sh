@@ -50,13 +50,22 @@ docker compose -f deploy/docker-compose.portal-static.yml up -d portal \
     || log_error "容器启动失败"
 
 # ---- 健康检查 ----
-for i in $(seq 1 15); do
-    if curl -sf -o /dev/null "http://127.0.0.1:3000/healthz"; then
+# curl 必须带超时：若 worker 未起来，master 仍会 listen 但无人 accept，
+# 请求会长时间挂起（而非快速失败），无超时的 curl 会把部署拖到系统默认超时。
+# 单次最多 5s，10 次共约 70s 上限。
+for i in $(seq 1 10); do
+    if curl -sf -o /dev/null --connect-timeout 3 --max-time 5 "http://127.0.0.1:3000/healthz"; then
         log_ok "门户健康检查通过 (127.0.0.1:3000)"
         exit 0
     fi
     sleep 2
 done
 
-docker logs --tail 50 hrwai-portal 2>/dev/null || true
+# ---- 失败诊断 ----
+log_info "健康检查未通过，输出诊断信息："
+docker inspect hrwai-portal --format '容器状态: {{.State.Status}}' 2>/dev/null || true
+docker logs --tail 30 hrwai-portal 2>/dev/null || true
+if docker logs hrwai-portal 2>/dev/null | grep -q 'socketpair() failed'; then
+    log_info "检测到 socketpair() 失败：多为 AppArmor/seccomp 限制，检查 compose 的 security_opt"
+fi
 log_error "门户健康检查失败（http://127.0.0.1:3000/healthz）"

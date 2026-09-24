@@ -8,6 +8,11 @@ services:
     container_name: hrwai-portal
     restart: unless-stopped
     network_mode: host
+    # 必选：PVE 宿主机上 docker 默认 AppArmor profile 会拦截 nginx 的
+    # socketpair()，导致 worker 进程无法启动（master 正常监听但无人 accept，
+    # 表现为 HTTP 请求挂起而非连接拒绝）。宿主机 nginx 反代仅走回环，风险可控。
+    security_opt:
+      - apparmor=unconfined
     volumes:
       # 站点目录（只读挂载，更新 HTML 后无需重建镜像）
       - ${SITE_DIR}:/usr/share/nginx/html:ro

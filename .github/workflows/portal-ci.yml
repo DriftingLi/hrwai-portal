@@ -75,6 +75,8 @@ jobs:
     needs: check
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # 兜底：跨境 SSH 或远程命令异常挂起时不要无限占用 runner
+    timeout-minutes: 20
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.environment || 'production') || (github.ref == 'refs/heads/main' && 'production' || 'testing') }}
     env:
