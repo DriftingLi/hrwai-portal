@@ -7,6 +7,14 @@ import { buildSiteUrl } from './utils/siteUrl'
 // 此处归一化为 www 固定版（SEO 决策，见 utils/siteUrl.ts）。
 const siteUrl = buildSiteUrl('/', process.env.PORTAL_SITE_URL || '').replace(/\/$/, '')
 
+// 功能服务域根（training./valuation. 子域所在域）。门户换域名后功能服务可能仍在原域，
+// 故与站点地址分开配置：未配置时跟随站点地址（门户与功能同根域的旧行为）。
+// 不加 www 前缀亦可——buildSubdomainUrl 会自行剥离。
+const featureBase = (process.env.PORTAL_FEATURE_BASE || siteUrl).replace(/\/$/, '')
+
+// ICP 备案号随域名变化：默认保留门户原备案号，接入新域名并完成备案后用 PORTAL_ICP 覆盖。
+const icp = process.env.PORTAL_ICP ?? '粤ICP备2026005936号-1'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-01',
 
@@ -31,13 +39,17 @@ export default defineNuxtConfig({
   },
 
   // ===== 运行时配置（部署时经环境变量覆盖） =====
-  // NUXT_API_INTERNAL_BASE    SSR 直连后端的内部地址（dev 默认本机 8080）
-  // PORTAL_SITE_URL           canonical/OG/sitemap 使用的 www 站点地址（如 https://www.example.com）
+  // NUXT_API_INTERNAL_BASE    SSR 直连后端的地址（dev 默认本机 8080）
+  // PORTAL_SITE_URL           canonical/OG/sitemap 使用的站点地址（如 https://www.hrwai.cn）
+  // PORTAL_FEATURE_BASE       功能服务域根（training./valuation. 所在域）；缺省跟随站点地址
+  // PORTAL_ICP                页脚 ICP 备案号；缺省为门户原备案号
   // NUXT_PUBLIC_BAIDU_VERIFICATION  百度站长验证码，留空则不输出验证 meta
   runtimeConfig: {
     apiInternalBase: process.env.NUXT_API_INTERNAL_BASE || 'http://127.0.0.1:8080',
     public: {
       siteUrl,
+      featureBase,
+      icp,
       baiduVerification: ''
     }
   },
