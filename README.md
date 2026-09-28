@@ -50,25 +50,32 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 
 - `Dockerfile`：node:22 多阶段，运行期可用 `-e NUXT_API_INTERNAL_BASE=...` 覆盖后端地址
 - `nginx.conf.template`：可选的多站点宿主机入口（整站转发到 portal 容器；`/api` 与 `/static` 由 Nitro 内部代理，无需单独反代）
-- `.github/workflows/portal-ci.yml`：CI/CD——任意分支 push 自动 check + build + 部署 **testing**（验证通过后 PR 进 main）；PR 进 main 跑 check（分支保护要求）；main push（PR 合并）自动部署 **production**；`workflow_dispatch` 可手动指定环境/ref
+- `edgeone.json`：EdgeOne Pages 构建配置（构建命令 / 安装命令 / Node 版本），见下节
 
-### CI/CD 部署（ghcr.io + 服务器）
+### 部署（腾讯云 EdgeOne Pages）
 
-镜像推送到 `ghcr.io/<org>/hrwai-portal`，服务器经本地 `ghcr-proxy`（127.0.0.1:5000 pull-through 缓存）拉取；www 分流（含 ai-assistant/根域 301）由 monorepo `frontend/nginx-host.conf` 统一管理（nginx 配置不在此仓库版本化，避免双源冲突），`/api` 与 `/static` 由 Nitro 内部代理到后端。
+生产与预览由 EdgeOne Pages 托管：在 EdgeOne 控制台「连接 Git 仓库」选择本仓库即可，
+之后 push 到 main 自动构建部署。
 
-需要配置的 Secrets / Variables：
+| 项目 | 值 |
+| --- | --- |
+| 框架预设 | Nuxt（平台自动识别） |
+| 构建命令 | `npm run build` |
+| 安装命令 | `npm install` |
+| Node 版本 | 22.11.0 |
+| 输出目录 | 留空交由平台 Nuxt 预设处理 |
 
-| 级别 | 名称 | 说明 |
+需要在「项目设置 - 环境变量」中配置：
+
+| 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| 仓库 Secrets | `SSH_HOST` / `SSH_PORT` / `SSH_USER` / `SSH_PRIVATE_KEY` | SSH 跳板（pve 公网，如 `183.36.195.104:2222` root） |
-| 环境 Secrets | `SSH_JUMP_HOST` | LXC 内网 IP（production `172.17.1.201` / testing `172.17.1.200`） |
-| 环境 Secrets | `NUXT_API_INTERNAL_BASE` | SSR 后端地址（host 网络下 `http://127.0.0.1:8080`） |
-| 仓库 Secrets | `PORTAL_SITE_URL` | www 站点地址（如 `https://www.gccsmile.com`；裸域自动补 www） |
-| 仓库 Secrets | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 可选，百度验证码 |
-| 仓库 Variables | `REGISTRY_PROXY` | `127.0.0.1:5000` |
-| 仓库 Variables | `KEEP_IMAGES` | 旧镜像保留数，默认 3 |
+| `NUXT_API_INTERNAL_BASE` | 是 | SSR 直连后端的地址。**边缘运行时访问不到服务器内网回环地址**，必须填公网可达的后端地址（原服务器部署的 `http://127.0.0.1:8080` 在 EdgeOne 上不可用） |
+| `PORTAL_SITE_URL` | 是 | www 站点地址（如 `https://www.gccsmile.com`），canonical / OG / sitemap 使用 |
+| `NUXT_PUBLIC_BAIDU_VERIFICATION` | 否 | 百度站长验证码，留空不输出验证 meta |
 
-触发部署：`gh workflow run portal-ci.yml -f environment=production -f ref=<sha>`（GitHub Actions → workflow_dispatch 选择环境）。
+> **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
+> workflow 已移除；`deploy/` 下的编排与脚本保留备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
+> `check` 状态检查、testing 部署要求同步取消。
 
 ## 页面与路由
 
