@@ -69,9 +69,17 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `NUXT_API_INTERNAL_BASE` | 是 | SSR 直连后端的地址。**边缘运行时访问不到服务器内网回环地址**，必须填公网可达的后端地址（原服务器部署的 `http://127.0.0.1:8080` 在 EdgeOne 上不可用） |
-| `PORTAL_SITE_URL` | 是 | www 站点地址（如 `https://www.gccsmile.com`），canonical / OG / sitemap 使用 |
+| `NUXT_API_INTERNAL_BASE` | 是 | 后端入口地址，填**公网可达**的后端域名。当前取 `https://www.gccsmile.com`——该域名的 `/api/` 与 `/static/` 由宿主机 nginx 反代到后端，已验证可用。**EdgeOne 边缘运行时访问不到服务器内网回环地址**，原先服务器部署用的 `http://127.0.0.1:8080` 不可用 |
+| `PORTAL_SITE_URL` | 是 | 门户自身的站点地址（canonical / OG / sitemap 使用），如 `https://门户域名`。非 www 地址会被自动补 `www.` 前缀（见 `utils/siteUrl.ts`），因此只对 `www.` 开头的域名或裸域填写符合预期 |
 | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 否 | 百度站长验证码，留空不输出验证 meta |
+
+> **域名规划**：门户域名与后端域名相互独立——门户（本仓库）可挂在任意域名，
+> 后端接口与静态资源仍由 `gccsmile.com` 提供（后端返回的图片等绝对 URL 指向该域名，
+> 因此它对访客必须可达）。
+>
+> ⚠️ 注意 `utils/siteUrl.ts` 的 `buildSubdomainUrl`：功能入口跳转（`training.` / `valuation.`）
+> 以**门户站点的根域**拼子域前缀。若门户挂在与 `gccsmile.com` 无关的域名下，
+> 这些跳转会指向门户域名的子域而非实际服务地址，需要另行调整。
 
 > **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
 > workflow 已移除；`deploy/` 下的编排与脚本保留备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
