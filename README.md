@@ -61,8 +61,8 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 | --- | --- |
 | 框架预设 | Nuxt（平台自动识别） |
 | 构建命令 | `npm run build` |
-| 安装命令 | `npm install` |
-| Node 版本 | 22.11.0 |
+| 安装命令 | `npm ci` |
+| Node 版本 | 22.17.1（**必须 ≥ 22.12.0**：rolldown 的平台二进制要求 `^20.19.0 \|\| >=22.12.0`，低于该版本会被跳过安装，构建报 `Cannot find native binding`） |
 | 输出目录 | 留空交由平台 Nuxt 预设处理 |
 
 需要在「项目设置 - 环境变量」中配置：
