@@ -22,6 +22,16 @@ describe('buildSubdomainUrl', () => {
     expect(buildSubdomainUrl('valuation', '/x', '')).toBe('/x')
   })
 
+  it('门户域与功能服务域不同时，跳转指向功能域（门户换域名的场景）', () => {
+    // 门户挂在 hrwai.cn，功能服务仍留在 gccsmile.com
+    expect(buildSubdomainUrl('training', '/', 'https://gccsmile.com')).toBe(
+      'https://training.gccsmile.com/'
+    )
+    expect(buildSubdomainUrl('valuation', '/history', 'https://www.gccsmile.com')).toBe(
+      'https://valuation.gccsmile.com/history'
+    )
+  })
+
   it('协议覆盖：客户端跳转以当前页协议为准（生产 https 适配）', () => {
     // 站点配置为 http、当前页 https → 跳转 https（生产切 https 后的主场景）
     expect(buildSubdomainUrl('training', '/', 'http://www.example.com', 'https:')).toBe(
