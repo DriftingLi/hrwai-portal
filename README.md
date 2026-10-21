@@ -72,7 +72,7 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 | `NUXT_API_INTERNAL_BASE` | 是 | 后端入口地址，填**公网可达**的后端域名。当前取 `https://www.gccsmile.com`——该域名的 `/api/` 与 `/static/` 由宿主机 nginx 反代到后端，已验证可用。**EdgeOne 边缘运行时访问不到服务器内网回环地址**，原先服务器部署用的 `http://127.0.0.1:8080` 不可用 |
 | `PORTAL_SITE_URL` | 是 | 门户自身的站点地址（canonical / OG / sitemap 使用）。当前为 `https://www.hrwai.cn`。非 www 地址会被自动补 `www.` 前缀（见 `utils/siteUrl.ts`），因此裸域填 `https://hrwai.cn` 也会归一化为 `https://www.hrwai.cn` |
 | `PORTAL_FEATURE_BASE` | 是 | 功能服务域根（`training.` / `valuation.` 子域所在域），当前为 `https://gccsmile.com`。缺省时跟随 `PORTAL_SITE_URL`——**门户换域名后必须显式设置**，否则功能入口跳转会指向门户域名的子域 |
-| `PORTAL_ICP` | 否 | 页脚 ICP 备案号，缺省为门户原备案号；留空则不输出备案信息 |
+| `PORTAL_ICP` | 否 | 页脚 ICP 备案号，缺省为 `粤ICP备2026161235号-1`（hrwai.cn 的备案号）；留空则不输出备案信息 |
 | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 否 | 百度站长验证码，留空不输出验证 meta |
 
 > **域名分工**：门户（官网）用 `www.hrwai.cn`；后端接口与静态资源仍由 `gccsmile.com` 提供
@@ -80,8 +80,9 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 > 也在其子域（`training.` / `valuation.gccsmile.com`），所以 `PORTAL_FEATURE_BASE` 必须
 > 显式指向 `https://gccsmile.com`。
 >
-> ⚠️ `hrwai.cn` **尚未完成 ICP 备案**：备案完成前腾讯云国内节点无法对外提供服务，
-> 且页脚不能沿用 `gccsmile.com` 的备案号。备案下来后用 `PORTAL_ICP` 填入新备案号。
+> ✅ `hrwai.cn` 已完成 ICP 备案（**粤ICP备2026161235号-1**）。页脚备案号取自 `PORTAL_ICP`，
+> 代码内缺省值已设为该号码；若 EdgeOne 项目环境变量里仍配着旧域名（gccsmile.com）的备案号，
+> 需同步修改或删除该变量。
 
 > **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
 > workflow 已移除；`deploy/` 下的编排与脚本保留备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
