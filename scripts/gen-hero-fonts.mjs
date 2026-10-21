@@ -18,7 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 // 按渲染字重分组：400→MiSans Regular(330) / 500→MiSans Demibold(450) / 700 标题 CJK→MiSans Heavy(630)
 const HERO_TEXT = {
   regular:
-    '和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI 驱动叉车全生命周期智能化升级。向下探索',
+    '和润天下（广州）人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI 驱动叉车全生命周期智能化升级。向下探索',
   demibold: 'AI × 叉车全生命周期了解我们核心服务',
   heavy: '和润天下',
   // --font-display 栈中西文优先命中 Space Grotesk（hero 标题 + 导航 logo）

@@ -9,7 +9,7 @@
             <span class="brand-name text-gradient">和润天下</span>
           </div>
           <p class="brand-desc">
-            和润天下人工智能科技有限公司，致力于用AI赋能叉车行业，推动残值评估与智能运维的数字化转型。
+            和润天下（广州）人工智能科技有限公司，致力于用AI赋能叉车行业，推动残值评估与智能运维的数字化转型。
           </p>
         </div>
 
@@ -87,7 +87,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© 2026 和润天下人工智能科技有限公司 版权所有<template v-if="icp"> | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">{{ icp }}</a></template></p>
+        <p>© 2026 和润天下（广州）人工智能科技有限公司 版权所有<template v-if="icp"> | <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer" class="beian-link">{{ icp }}</a></template></p>
       </div>
     </div>
   </footer>

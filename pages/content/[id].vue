@@ -250,10 +250,10 @@ useHead({
               description: detail.value.summary,
               image: articleImage.value,
               datePublished: articlePublished.value,
-              author: { '@type': 'Organization', name: '和润天下人工智能科技有限公司' },
+              author: { '@type': 'Organization', name: '和润天下（广州）人工智能科技有限公司' },
               publisher: {
                 '@type': 'Organization',
-                name: '和润天下人工智能科技有限公司',
+                name: '和润天下（广州）人工智能科技有限公司',
                 logo: site('/images/HRWAIlogo.jpg')
               }
             }),

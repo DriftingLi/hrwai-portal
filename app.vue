@@ -44,11 +44,11 @@ if (baiduVerification) {
 // 全站默认 head（页面级 useSeoMeta 覆盖标题/描述）
 useHead({
   htmlAttrs: { lang: 'zh-CN' },
-  titleTemplate: (title) => (title ? `${title} - 和润天下` : '和润天下人工智能科技有限公司'),
+  titleTemplate: (title) => (title ? `${title} - 和润天下` : '和润天下（广州）人工智能科技有限公司'),
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes' },
     { name: 'format-detection', content: 'telephone=no' },
-    { name: 'description', content: '和润天下人工智能科技有限公司 — 深耕叉车行业，提供叉车维修培训、残值智能评估、二手叉车交易撮合与 AI 叉车助手等一站式人工智能解决方案。' }
+    { name: 'description', content: '和润天下（广州）人工智能科技有限公司 — 深耕叉车行业，提供叉车维修培训、残值智能评估、二手叉车交易撮合与 AI 叉车助手等一站式人工智能解决方案。' }
   ],
   // 标签页图标 = 公司 logo（由 scripts/gen-favicon.mjs 从 HRWAIlogo.jpg 生成）
   link: [
@@ -65,7 +65,7 @@ if (siteBase) {
   const organizationJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: '和润天下人工智能科技有限公司',
+    name: '和润天下（广州）人工智能科技有限公司',
     url: site('/'),
     logo: site('/images/HRWAIlogo.jpg'),
     description: '深耕叉车行业，以 AI 技术驱动产业智能化升级。'

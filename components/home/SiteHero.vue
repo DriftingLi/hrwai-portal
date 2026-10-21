@@ -18,7 +18,7 @@
         和润天下 <span class="text-gradient">HRWAI</span>
       </h1>
       <p class="hero-subtitle hero-in hero-in--3">
-        和润天下人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
+        和润天下（广州）人工智能科技有限公司 —— 深耕工程车辆垂直领域，以 AI
         驱动叉车全生命周期智能化升级。
       </p>
       <div class="hero-cta hero-in hero-in--4">
