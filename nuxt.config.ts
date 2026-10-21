@@ -47,6 +47,10 @@ export default defineNuxtConfig({
   // NUXT_PUBLIC_BAIDU_VERIFICATION  百度站长验证码，留空则不输出验证 meta
   runtimeConfig: {
     apiInternalBase: process.env.NUXT_API_INTERNAL_BASE || 'http://127.0.0.1:8080',
+    // 回源鉴权 token（票 FL#1746）：/api 代理回源时带 X-Origin-Token，源站 nginx 只有
+    // 在 token 命中时才采信 EO-Connecting-IP（真实客户端 IP）。留空 = 不带该头，
+    // 源站会退回「按边缘节点取 IP」的旧行为（不会更糟，但 IP 仍不是用户）。
+    apiOriginToken: process.env.NUXT_API_ORIGIN_TOKEN || '',
     public: {
       siteUrl,
       featureBase,
