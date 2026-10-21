@@ -49,13 +49,14 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 ```
 
 - `Dockerfile`：node:22 多阶段，运行期可用 `-e NUXT_API_INTERNAL_BASE=...` 覆盖后端地址
-- `nginx.conf.template`：可选的多站点宿主机入口（整站转发到 portal 容器；`/api` 与 `/static` 由 Nitro 内部代理，无需单独反代）
 - `edgeone.json`：EdgeOne Pages 构建配置（构建命令 / 安装命令 / Node 版本），见下节
 
 ### 部署（腾讯云 EdgeOne Pages）
 
-生产与预览由 EdgeOne Pages 托管：在 EdgeOne 控制台「连接 Git 仓库」选择本仓库即可，
-之后 push 到 main 自动构建部署。
+生产与预览由 EdgeOne Pages 托管，两种方式任选：
+
+- **Git 集成**：控制台「连接 Git 仓库」选择本仓库，push 到 main 自动构建部署
+- **CLI**：`edgeone pages deploy`（**当前实际使用的方式**——push 不会自动触发，改完代码需手动执行一次部署）
 
 | 项目 | 值 |
 | --- | --- |
@@ -85,9 +86,8 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 > 需同步修改或删除该变量。
 
 > **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
-> workflow 已移除；临时替换用的静态站（`yidao-static-site/`）及其静态部署编排已删除，
-> `deploy/` 下仅保留原 Nuxt 版服务器部署脚本备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
-> `check` 状态检查、testing 部署要求同步取消。
+> workflow、临时替换用的静态站（`yidao-static-site/`）以及全部服务器部署脚本（`deploy/`）均已删除。
+> 原 GitHub Secrets / Variables 与分支保护中的 `check` 状态检查、testing 部署要求同步取消。
 
 ## 页面与路由
 
