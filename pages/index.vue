@@ -23,16 +23,16 @@ const { site } = useSiteLinks()
 const { getPublicList } = useFeaturedApi()
 
 // 首页 SEO（预渲染静态 HTML 携带完整元数据）
-// title 不设置：由 app.vue titleTemplate 默认输出「和润天下人工智能科技有限公司」，避免后缀冗余
+// title 不设置：由 app.vue titleTemplate 默认输出「和润天下（广州）人工智能科技有限公司」，避免后缀冗余
 useSeoMeta({
-  description: '和润天下人工智能科技有限公司 — 深耕叉车行业，提供叉车维修培训认证、叉车残值智能评估、二手叉车信息撮合与 AI 叉车助手，助力叉车产业链数字化升级。',
-  ogTitle: '和润天下人工智能科技有限公司',
+  description: '和润天下（广州）人工智能科技有限公司 — 深耕叉车行业，提供叉车维修培训认证、叉车残值智能评估、二手叉车信息撮合与 AI 叉车助手，助力叉车产业链数字化升级。',
+  ogTitle: '和润天下（广州）人工智能科技有限公司',
   ogDescription: '深耕叉车行业，提供叉车维修培训、残值评估、二手交易与 AI 助手一站式解决方案。',
   ogType: 'website',
   ogImage: site('/images/hero-bg.webp'),
   ogUrl: site('/'),
   twitterCard: 'summary_large_image',
-  twitterTitle: '和润天下人工智能科技有限公司'
+  twitterTitle: '和润天下（广州）人工智能科技有限公司'
 })
 
 /* ---------- 内容精选数据（板块呈现见 SectionFeatured） ---------- */
