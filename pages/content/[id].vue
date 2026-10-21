@@ -451,6 +451,15 @@ useHead({
 }
 
 /* 侧边栏 */
+/*
+ * 目录与「相关资讯」之间留白：目录最后一行只有行内 padding（8px），而 .sidebar-title 的
+ * margin-top 是 0 ⇒ 两个标题在这张卡里贴在一起、看着像打架。间距挂在目录一侧（:deep 触到
+ * 子组件根节点），这样没有目录（正文没有 h2/h3）时不会凭空多出一段空白。
+ */
+.article-sidebar :deep(.toc-desktop) {
+  margin-bottom: var(--space-8, 32px);
+}
+
 .article-sidebar {
   background: #fff;
   border-radius: var(--radius-lg, 12px);
