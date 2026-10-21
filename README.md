@@ -40,23 +40,12 @@ npm run build
 node .output/server/index.mjs
 ```
 
-容器化：
-
-```bash
-docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
-             --build-arg PORTAL_SITE_URL=https://www.example.com \
-             -t hrwai-portal .
-```
-
-- `Dockerfile`：node:22 多阶段，运行期可用 `-e NUXT_API_INTERNAL_BASE=...` 覆盖后端地址
 - `edgeone.json`：EdgeOne Pages 构建配置（构建命令 / 安装命令 / Node 版本），见下节
 
 ### 部署（腾讯云 EdgeOne Pages）
 
-生产与预览由 EdgeOne Pages 托管，两种方式任选：
-
-- **Git 集成**：控制台「连接 Git 仓库」选择本仓库，push 到 main 自动构建部署
-- **CLI**：`edgeone pages deploy`（**当前实际使用的方式**——push 不会自动触发，改完代码需手动执行一次部署）
+生产与预览由 EdgeOne Pages 托管：仓库已通过 **Git 集成**连接，push 到 main 会自动构建并部署
+（也可在控制台手动触发重新部署）。
 
 | 项目 | 值 |
 | --- | --- |
