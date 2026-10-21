@@ -85,7 +85,8 @@ docker build --build-arg NUXT_API_INTERNAL_BASE=http://backend:8080 \
 > 需同步修改或删除该变量。
 
 > **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
-> workflow 已移除；`deploy/` 下的编排与脚本保留备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
+> workflow 已移除；临时替换用的静态站（`yidao-static-site/`）及其静态部署编排已删除，
+> `deploy/` 下仅保留原 Nuxt 版服务器部署脚本备查，不再执行。原 GitHub Secrets / Variables 与分支保护中的
 > `check` 状态检查、testing 部署要求同步取消。
 
 ## 页面与路由
