@@ -41,6 +41,8 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'valuation-auth' })
+
 import type { EvaluationRecord } from '~/api/valuation'
 import { valuationErrorStatus } from '~/api/valuation'
 import { useValuationApi } from '~/composables/useValuationApi'

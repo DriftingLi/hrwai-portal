@@ -1,5 +1,5 @@
 <template>
-  <ValuationShell title="登录估值工作区" subtitle="用同一个和润账号登录；登录后即可查看历史评估并下载报告。" active="">
+  <ValuationShell title="登录估值工作区" active="">
     <form v-if="!user" class="login-card" @submit.prevent="submit">
       <label class="field">
         <span class="field-label">账号</span>
@@ -29,12 +29,7 @@
       <button type="submit" class="btn-primary" :disabled="submitting" data-test="submit">
         {{ submitting ? '登录中…' : '登录' }}
       </button>
-
-      <p class="login-hint">
-        还没有账号？请联系和润业务人员开通；培训站与残值评估使用同一套账号。
-      </p>
     </form>
-    <p v-else class="login-hint">已登录，正在前往评估历史…</p>
   </ValuationShell>
 </template>
 
@@ -84,6 +79,7 @@ async function submit() {
 <style scoped>
 .login-card {
   max-width: 420px;
+  margin: 0 auto;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -139,12 +135,6 @@ async function submit() {
   margin: 0;
   color: var(--color-danger);
   font-size: var(--text-sm);
-}
-.login-hint {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-  line-height: var(--leading-relaxed);
 }
 @media (max-width: 640px) {
   .login-card {

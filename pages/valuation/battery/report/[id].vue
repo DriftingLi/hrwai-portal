@@ -42,6 +42,8 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'valuation-auth' })
+
 import { computed } from 'vue'
 import type { BatteryRecord } from '~/api/valuation'
 import { batteryTypeLabels, valuationErrorStatus } from '~/api/valuation'
