@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeHost, valuationHostRedirect } from '../valuationHost'
+import { EDGE_HOST_HEADERS, normalizeHost, valuationHostRedirect } from '../valuationHost'
 
 describe('valuationHostRedirect', () => {
   it('残值子域根路径重定向到工具页', () => {
@@ -22,9 +22,18 @@ describe('valuationHostRedirect', () => {
     expect(valuationHostRedirect(null, '/')).toBeNull()
   })
 
-  it('带端口 / 代理链（EdgeOne 改写 Host 时的形态）', () => {
+  it('带端口 / 代理链（边缘改写 Host 时的形态）', () => {
     expect(valuationHostRedirect('valuation.hrwai.cn:443', '/')).toBe('/valuation')
     expect(valuationHostRedirect('valuation.hrwai.cn, 10.0.0.1:8080', '/')).toBe('/valuation')
+  })
+})
+
+describe('边缘主机线索', () => {
+  // 线上探针实测（2026-10-22）：Host 被改写成 pages-pro-*.qcloudteo.com，
+  // 真实域名只在 eo-pages-host 里，x-forwarded-host 缺席。去掉这条等于让根路径又回 200。
+  it('默认读 eo-pages-host，其次 x-forwarded-host', () => {
+    expect(EDGE_HOST_HEADERS[0]).toBe('eo-pages-host')
+    expect(EDGE_HOST_HEADERS).toContain('x-forwarded-host')
   })
 })
 

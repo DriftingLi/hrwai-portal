@@ -1,36 +1,26 @@
 // 残值子域的根路径重定向：valuation.hrwai.cn/ → /valuation。
 // 判据在 utils/valuationHost.ts（纯函数，单测覆盖），这里只做 h3 的接线。
 //
-// 主机名取多路来源：Host 头（常规）与 X-Forwarded-Host（边缘/反代改写 Host 时）。
-// 线上第一版只读 Host，结果 / 在 EdgeOne 后面一直 200 回官网首页——两手都判才稳。
-import { defineEventHandler, getQuery, getRequestHeader, getRequestHost, getRequestURL, sendRedirect } from 'h3'
-import { valuationHostRedirect } from '../../utils/valuationHost'
+// 主机名按「边缘自报 → 代理链 → 直连」的顺序取。第一版只读 Host，/ 一直回 200；
+// 探针实测发现 EdgeOne Pages 把 Host 改写成了内部域名（x-forwarded-host 根本没有），
+// 真实域名在 eo-pages-host 里——所以这一步不能省。
+import { defineEventHandler, getRequestHeader, getRequestHost, getRequestURL, sendRedirect } from 'h3'
+import { EDGE_HOST_HEADERS, valuationHostRedirect } from '../../utils/valuationHost'
 
-/** 诊断探针（临时）：带 ?__hostprobe=1 时把「边缘给了哪些主机线索」原样回出来 */
-function hostProbe(event: Parameters<typeof getRequestHost>[0]) {
-  const picked: Record<string, string> = {}
-  for (const [name, value] of Object.entries(event.node.req.headers)) {
-    if (!/host|forward|orig|eo-|real-ip|via|server|x-nws/i.test(name)) continue
-    picked[name] = Array.isArray(value) ? value.join(',') : String(value ?? '')
+/** 主机名候选，按可信度从高到低（边缘自报的那个才是用户看到的域名） */
+export function hostCandidates(event: Parameters<typeof getRequestHost>[0]): string[] {
+  const candidates: string[] = []
+  for (const name of EDGE_HOST_HEADERS) {
+    const value = getRequestHeader(event, name)
+    if (value) candidates.push(value)
   }
-  return {
-    picked,
-    host: getRequestHost(event),
-    hostWithXfh: getRequestHost(event, { xForwardedHost: true }),
-    url: getRequestURL(event).href
-  }
+  candidates.push(getRequestHost(event, { xForwardedHost: true }), getRequestHost(event))
+  return candidates
 }
 
 export default defineEventHandler((event) => {
-  if (getQuery(event).__hostprobe === '1') return hostProbe(event)
-
   const pathname = getRequestURL(event).pathname
-  const candidates = [
-    getRequestHost(event, { xForwardedHost: true }),
-    getRequestHost(event),
-    getRequestHeader(event, 'x-forwarded-host')
-  ]
-  for (const host of candidates) {
+  for (const host of hostCandidates(event)) {
     const target = valuationHostRedirect(host, pathname)
     if (target) return sendRedirect(event, target, 302)
   }
