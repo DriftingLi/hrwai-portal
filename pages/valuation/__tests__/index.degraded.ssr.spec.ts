@@ -20,7 +20,7 @@ describe('整机评估页（字典不可用）', () => {
     const html = wrapper.html()
 
     expect(html).toContain('字典数据暂时不可用')
-    expect(html).toContain('开始评估')
+    expect(html).toContain('提交评估')
     expect(html).toContain('请选择品牌')
   })
 })
