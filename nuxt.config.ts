@@ -26,6 +26,8 @@ export default defineNuxtConfig({
   // ===== 组件自动导入（home/ 子目录关闭路径前缀，板块组件保持 SiteHero 等原名） =====
   components: [
     { path: '~/components/home', pathPrefix: false },
+    // 估值页组件同样关掉路径前缀：ValuationShell / WholeMachineForm 等按原名使用
+    { path: '~/components/valuation', pathPrefix: false },
     '~/components'
   ],
 
@@ -63,10 +65,15 @@ export default defineNuxtConfig({
   // sitemap 源路由位于 /__portal__/ 命名空间：/api/** 由代理中间件转发后端，避免劫持
   sitemap: {
     sources: ['/__portal__/sitemap-urls'],
-    autoLastmod: true
+    autoLastmod: true,
+    // 估值工作区是登录后的动态页面，不进 sitemap（票 #32）；
+    // 保留模块默认的 /_** 排除项（Nuxt 内部路径），不要整体覆盖掉
+    exclude: ['/_**', '/valuation/**']
   },
   robots: {
-    sitemap: '/sitemap.xml'
+    sitemap: '/sitemap.xml',
+    // 估值页面不抓取；索引层另有页面 meta 与 X-Robots-Tag 兜底
+    disallow: ['/valuation']
   },
 
   // ===== 全局样式（自托管字体 → 设计令牌 → 基础样式 → 文章正文） =====
@@ -101,7 +108,12 @@ export default defineNuxtConfig({
     '/robots.txt': { prerender: true },
     '/news': { swr: 60 },
     '/news/**': { swr: 60 },
-    '/content/**': { swr: 600 }
+    '/content/**': { swr: 600 },
+    // 估值工作区（票 #32）：按服务端会话实时渲染，**不预渲染**；
+    // /valuation/** 一律 noindex——动态评估页不该进搜索索引
+    '/valuation/**': {
+      headers: { 'x-robots-tag': 'noindex, nofollow' }
+    }
   },
 
   // ===== 类型检查 =====

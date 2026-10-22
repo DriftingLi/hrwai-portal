@@ -5,6 +5,7 @@
 - **SSR 混合渲染**：`/` 构建时预渲染；`/content/**` SWR 600s；`/news` SWR 60s（后台发布内容自动生效，无需 webhook）
 - **SEO**：全量 SSR HTML、sitemap.xml（构建时含全部已发布文章）、robots.txt、JSON-LD（Organization / Article / BreadcrumbList）、OG/Twitter Card、canonical（www 固定版）、百度验证 meta（可配置）
 - **与其它模块解耦**：门户只读消费后端公开 API；功能入口（培训 / 残值评估 / AI 助手）整页跳转到对应子域名（跳转协议跟随访问者当前页协议——生产 HTTPS 下自动使用 https 子域，不依赖构建期 PORTAL_SITE_URL 的协议值）
+- **残值评估工作区**：`/valuation/**` 与官网同一构建、同一套同源 BFF。估值令牌由 Nuxt 服务端持有（httpOnly 会话 Cookie），浏览器不接触令牌；`/valuation/**` 不预渲染且 noindex（见 ADR-0002）
 
 ## 技术栈
 
@@ -14,7 +15,7 @@ Nuxt 4 + TypeScript + Nitro（standalone）+ Vitest + marked（服务端 Markdow
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `NUXT_API_INTERNAL_BASE` | 是 | SSR 直连后端内部地址（docker 网络 `http://backend:8080`，本地 `http://127.0.0.1:8080`）；浏览器请求经同源 `/api` 代理转发同一后端 |
+| `NUXT_API_INTERNAL_BASE` | 是 | SSR 直连后端内部地址（docker 网络 `http://backend:8080`，本地 `http://127.0.0.1:8080`）；浏览器请求经同源 `/api` 代理转发同一后端；估值 BFF 的登录/当前用户也走这个地址 |
 | `PORTAL_SITE_URL` | 部署时建议 | canonical / OG / sitemap 使用的 www 站点地址（如 `https://www.example.com`）；未配置则输出相对路径 |
 | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 可选 | 百度站长平台验证码；留空不输出验证 meta |
 
@@ -85,20 +86,32 @@ node .output/server/index.mjs
 | `/` | 预渲染 | 官网首页（Hero/公司介绍/创始人/核心服务/合作模式/服务保障/内容精选轮播/CTA） |
 | `/content/[id]` | SSR + SWR 600s | 文章详情（Markdown 服务端渲染、上/下一篇、相关资讯）；不存在/未发布返回真实 404；阅读量由 hydration 后客户端端点计数（SSR/爬虫不计） |
 | `/news`、`/news/[category]` | SSR + SWR 60s | 内容精选归档页（全部 + 公司动态/行业新闻/产品资讯/资讯），分页 |
+| `/valuation` | SSR（不预渲染） | 整机残值评估输入；字典公开接口服务端预取，提交无需登录 |
+| `/valuation/battery` | SSR（不预渲染） | 电池 RUL 评估输入（至少 10 个完整循环的 JSON） |
+| `/valuation/history` | SSR（需登录，不预渲染） | 评估历史（整机 / 电池两个页签），令牌由服务端注入 |
+| `/valuation/report/[id]`、`/valuation/battery/report/[id]` | SSR（需登录，不预渲染） | 历史详情 + PDF 报告下载入口（经 `/api` 代理流式转发） |
+| `/valuation/login` | SSR（不预渲染） | 估值登录（BFF 会话 Cookie），已登录自动回跳 |
 | `/sitemap.xml`、`/robots.txt` | 预渲染 | 构建时生成 |
+
+### 残值评估工作区（`/valuation/**`）
+
+- **登录与会话（ADR-0002）**：`/__portal__/valuation/session/{login,logout}` 由本仓 BFF 独占——服务端调 `POST /api/valuation/auth/login`，把双令牌封进 **httpOnly + Secure + SameSite=Lax + Path=/、不设 Domain** 的本域会话 Cookie；浏览器只拿会话摘要。
+- **上游鉴权**：`/api/valuation/**` 仍由 `server/middleware/api-proxy.ts` 转发（唯一一套代理），转发前注入 `Authorization: Bearer` 并摘掉会话 Cookie 与浏览器自带的 `Authorization` / `X-Origin-Token`。`/api/valuation/auth/login|logout` 与 `/api/valuation/admin/**` 在代理层返回 404。
+- **报告下载**：入口指向 `/api/valuation/evaluations/:id/report`（电池同理），由既有代理管道**流式**转发，PDF 不进内存。
+- **SEO**：`/valuation/**` 不预渲染；页面输出 `<meta name="robots" content="noindex, nofollow">`，`routeRules` 另加 `X-Robots-Tag`，`robots.txt` 亦 disallow。
 
 ## 目录结构
 
 ```
-api/          数据访问层（门户唯一 seam，页面不直接 $fetch）
+api/          数据访问层（页面唯一 seam，页面不直接 $fetch）：featured / valuation
 assets/css/   设计令牌（design-tokens/global/markdown，自 monorepo 移植）
-components/   导航/页脚/归档页组件
-composables/  useFeaturedApi（SSR 直连后端）/ useSiteLinks（跨子域链接）
+components/   导航/页脚/归档页组件；valuation/ 估值工作区组件
+composables/  useFeaturedApi（SSR 直连后端）/ useValuationApi（BFF 同源）/ useSiteLinks（跨子域链接）
 config/       官网导航
-pages/        路由页面
+pages/        路由页面（valuation/ 为残值评估工作区）
 plugins/      v-reveal 滚动动画指令
-server/       Nitro 代理中间件（/api、/static）+ sitemap 数据源
-utils/        纯函数（fileUrl / markdown / siteUrl），单测覆盖
+server/       Nitro 代理中间件（/api、/static，含估值 Bearer 注入）+ sitemap 数据源 + 估值 BFF 会话路由
+utils/        纯函数（fileUrl / markdown / siteUrl / valuation*），单测覆盖
 ```
 
 ## 领域词汇
