@@ -40,21 +40,21 @@ import { products, palette, type ProductCard } from '~/config/homeContent'
 import { useSiteLinks } from '~/composables/useSiteLinks'
 import { externalMallUrl } from '~/config/links'
 
-const { subdomain } = useSiteLinks()
+const { training, valuation } = useSiteLinks()
 
 function handleCardClick(item: ProductCard) {
   // 门户不再持有登录态：核心服务入口统一整页跳转到对应功能子域名
   switch (item.module) {
     case 'training':
-      window.location.href = subdomain('training', '/')
+      window.location.href = training('/')
       break
 
     case 'valuation':
-      window.location.href = subdomain('valuation', '/')
+      window.location.href = valuation('/')
       break
 
     case 'ai-assistant':
-      window.location.href = subdomain('training', '/ai-assistant')
+      window.location.href = training('/ai-assistant')
       break
 
     case 'trade':

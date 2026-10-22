@@ -6,6 +6,22 @@
  * protocol 可选：客户端跳转时以当前页协议覆盖配置的协议——
  * 生产 https 下跨子域跳转保持 https，不依赖构建期配置的协议值。
  */
+/**
+ * 把「服务基址 + 路径」拼成绝对 URL（#32 后续：training 与 valuation 已分属两个域族）。
+ *
+ * 为什么不再用 buildSubdomainUrl：那条假设「training./valuation. 共用一个域根」，
+ * 而当前训练站是 training.gdyidao.cn（易道族）、残值是 valuation.hrwai.cn/valuation（和润族）。
+ * 一个域根表达不了两个族，硬拼出来的链接会指向不存在的站点。
+ *
+ * 基址不带尾斜杠；path 传 '/' 时保留尾斜杠（与站点根一致），其余直接拼。
+ */
+export function buildServiceUrl(base: string, path: string): string {
+  const root = (base || '').replace(/\/+$/, '')
+  const sub = path.startsWith('/') ? path : `/${path}`
+  if (!root) return sub
+  return sub === '/' ? `${root}/` : `${root}${sub}`
+}
+
 export function buildSubdomainUrl(
   sub: 'training' | 'valuation',
   path: string,
