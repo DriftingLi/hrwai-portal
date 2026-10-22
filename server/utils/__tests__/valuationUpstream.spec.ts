@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildUpstreamHeaders, loginValuation, logoutValuation, fetchValuationMe, resolveValuationUpstreamUrl, ValuationUpstreamError, type UpstreamRequestInit, type UpstreamResponse, type ValuationUpstreamFetch } from '../valuationUpstream'
+import { buildUpstreamHeaders, loginValuation, logoutValuation, fetchValuationMe, resolveValuationUpstreamUrl, rotateValuationTokens, ValuationUpstreamError, type UpstreamRequestInit, type UpstreamResponse, type ValuationUpstreamFetch } from '../valuationUpstream'
 
 const config = { base: 'http://backend:8080/', originToken: 'origin-secret' }
 
@@ -173,6 +173,54 @@ describe('fetchValuationMe', () => {
     await expect(fetchValuationMe({ config, fetch: fetchImpl }, 'access')).rejects.toMatchObject({
       status: 502,
       message: '查询失败'
+    })
+  })
+})
+
+describe('rotateValuationTokens', () => {
+  it('走主站 /api/auth/refresh 的请求体通道，收下新的一对令牌', async () => {
+    const { fetchImpl, calls } = fakeUpstream(() => ({
+      status: 200,
+      json: envelope({ token: 'access-2', refresh_token: 'refresh-2' })
+    }))
+    const outcome = await rotateValuationTokens({ config, fetch: fetchImpl }, 'refresh-1')
+    expect(outcome).toEqual({ ok: true, accessToken: 'access-2', refreshToken: 'refresh-2' })
+    expect(calls[0]?.url).toBe('http://backend:8080/api/auth/refresh')
+    expect(calls[0]?.init.method).toBe('POST')
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ refresh_token: 'refresh-1' })
+    // 续期不带旧 access：本仓没有族线索，后端据此走请求体分支
+    expect(calls[0]?.init.headers.authorization).toBeUndefined()
+  })
+
+  it('上游 401 = 会话彻底过期', async () => {
+    const { fetchImpl } = fakeUpstream(() => ({ status: 401, json: { code: 401, message: '登录已过期' } }))
+    expect(await rotateValuationTokens({ config, fetch: fetchImpl }, 'r')).toEqual({
+      ok: false,
+      reason: 'expired'
+    })
+  })
+
+  it('网络异常/上游 5xx 只算「这次没换成」，不能当成登出', async () => {
+    const boom: ValuationUpstreamFetch = async () => {
+      throw new Error('socket hang up')
+    }
+    expect(await rotateValuationTokens({ config, fetch: boom }, 'r')).toEqual({
+      ok: false,
+      reason: 'unavailable'
+    })
+    const { fetchImpl } = fakeUpstream(() => ({ status: 500, json: { code: 500 } }))
+    expect(await rotateValuationTokens({ config, fetch: fetchImpl }, 'r')).toEqual({
+      ok: false,
+      reason: 'unavailable'
+    })
+  })
+
+  it('上游没回新 refresh 时保留旧的，否则下一次续期就掉线', async () => {
+    const { fetchImpl } = fakeUpstream(() => ({ status: 200, json: envelope({ token: 'access-2' }) }))
+    expect(await rotateValuationTokens({ config, fetch: fetchImpl }, 'refresh-1')).toEqual({
+      ok: true,
+      accessToken: 'access-2',
+      refreshToken: 'refresh-1'
     })
   })
 })

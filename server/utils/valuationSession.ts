@@ -6,8 +6,9 @@
 // **不设 Domain**，因此不会漏到父域），浏览器只持有一段不透明串；Authorization: Bearer
 // 由服务端在代理时注入（server/middleware/api-proxy.ts）。
 //
-// 有效期与 access token 的 exp 对齐（后端默认 2h）：refresh 的自动续期要在服务端轮换并回写
-// Cookie，是独立决定，本票不做（见 PR「未覆盖」），因此这里不让 Cookie 活得比 access 更久。
+// Cookie 寿命与 access token 的 exp 对齐（后端默认 2h）。自动续期由
+// server/utils/valuationRefresh.ts 在服务端轮换并回写 Cookie——令牌始终不出服务端，
+// 浏览器那一段始终只是不透明串。
 import type { H3Event } from 'h3'
 import { getCookie } from 'h3'
 
@@ -118,6 +119,24 @@ export function valuationSessionMaxAge(
   if (exp === null) return VALUATION_SESSION_FALLBACK_TTL
   const remaining = exp - nowSeconds
   return remaining > 60 ? remaining : VALUATION_SESSION_FALLBACK_TTL
+}
+
+/**
+ * 是否该在本次请求上续期：access 剩余寿命 ≤ skew 时轮换。
+ * skew 默认 120s——留出「正在渲染的这个页面/这条请求」的余量；
+ * 已过期的 access（剩余为负）同样命中，因此「隔夜回来」的第一次请求就会续期。
+ */
+export const VALUATION_REFRESH_SKEW_SECONDS = 120
+
+export function valuationSessionNeedsRefresh(
+  session: Pick<ValuationSession, 'accessToken' | 'refreshToken'>,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+  skewSeconds: number = VALUATION_REFRESH_SKEW_SECONDS
+): boolean {
+  if (!session.refreshToken) return false
+  const exp = accessTokenExpirySeconds(session.accessToken)
+  if (exp === null) return false
+  return exp - nowSeconds <= skewSeconds
 }
 
 /** 下发会话用的 Cookie 属性 */

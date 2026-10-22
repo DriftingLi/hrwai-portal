@@ -174,6 +174,53 @@ export async function logoutValuation(
   }
 }
 
+/** 续期结果：ok=false 时原因决定调用方要不要清会话（expired 才代表这台设备彻底下线） */
+export type RotateOutcome =
+  | { ok: true; accessToken: string; refreshToken: string }
+  | { ok: false; reason: 'expired' | 'unavailable' }
+
+/**
+ * 续期：调主站既有 POST /api/auth/refresh（请求体通道，移动端同一条路）。
+ *
+ * 为什么是主站的端点而不是 /api/valuation/auth/refresh：后端没有后者。轮换本身保住令牌族
+ * （security.RotateRefresh 用 claims.Family() 重签），所以这里拿回来的仍是 aud=valuation 的
+ * 一对令牌，不需要后端为估值单开一个端点。
+ *
+ * 本仓没有族线索（不带 Cookie、不带 access 头），后端会走「请求体」分支，正是我们要的。
+ */
+export async function rotateValuationTokens(
+  deps: ValuationUpstreamDeps,
+  refreshToken: string
+): Promise<RotateOutcome> {
+  const url = resolveValuationUpstreamUrl(deps.config, '/api/auth/refresh')
+  let response: UpstreamResponse
+  try {
+    response = await deps.fetch(url, {
+      method: 'POST',
+      headers: { ...buildUpstreamHeaders(deps.config), 'content-type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    })
+  } catch {
+    // 网络抖动：既不是「过期」也不是「成功」，调用方应保留会话
+    return { ok: false, reason: 'unavailable' }
+  }
+  if (response.status === 401) return { ok: false, reason: 'expired' }
+
+  const envelope = readEnvelope(response.json)
+  if (response.status !== 200 || !envelope || envelope.code !== 200) {
+    return { ok: false, reason: 'unavailable' }
+  }
+  const data = (envelope.data ?? null) as Record<string, unknown> | null
+  const accessToken = asString(data?.token)
+  if (!accessToken) return { ok: false, reason: 'unavailable' }
+  return {
+    ok: true,
+    accessToken,
+    // 上游没回新 refresh 时保留旧的：轮换把它吊销了会在下一次续期把用户踢下线
+    refreshToken: asString(data?.refresh_token) || refreshToken
+  }
+}
+
 /**
  * 当前用户：校验会话是否仍被上游认可。
  * 返回 null = 令牌已失效（上游 401，调用方应清 Cookie）；上游不可达则抛错，

@@ -11,8 +11,10 @@
 // Cookie 从转发头里摘掉（它就是可用的令牌，上游不需要）。凭证策略单点在
 // server/utils/valuationProxy.ts，本文件只做装配。
 import { createError, getRequestHeader, proxyRequest } from 'h3'
-import { isBlockedValuationProxyPath, readValuationSession } from '../utils/valuationSession'
+import { isBlockedValuationProxyPath, isValuationApiPath, readValuationSession } from '../utils/valuationSession'
 import { planValuationProxy } from '../utils/valuationProxy'
+import { ensureFreshValuationSession } from '../utils/valuationRefresh'
+import { valuationCookieSecure, valuationUpstreamDeps } from '../utils/valuationRuntime'
 
 export default defineEventHandler(async (event) => {
   const path = event.path
@@ -28,11 +30,23 @@ export default defineEventHandler(async (event) => {
 
   const config = useRuntimeConfig(event)
   const base = (config.apiInternalBase as string).replace(/\/$/, '')
+
+  // 估值路径：access 快过期就先在服务端轮换（新会话回写 Cookie，浏览器仍然只持有一枚不透明串）。
+  // 必须发生在 proxyRequest 之前——那时响应头还没写，Cookie 一定带得出去。
+  let session = readValuationSession(event)
+  if (isValuationApiPath(path) && session) {
+    session = (
+      await ensureFreshValuationSession(event, valuationUpstreamDeps(event), {
+        secure: valuationCookieSecure(event)
+      })
+    ).session
+  }
+
   const plan = planValuationProxy({
     path,
     originToken: config.apiOriginToken as string,
     cookieHeader: getRequestHeader(event, 'cookie'),
-    session: readValuationSession(event)
+    session
   })
 
   // 抹掉浏览器不该自带的头：回源 token 只能来自部署环境变量；估值路径的 Authorization

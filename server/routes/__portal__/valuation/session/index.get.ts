@@ -4,14 +4,18 @@ import { deleteCookie } from 'h3'
 import {
   VALUATION_SESSION_COOKIE,
   buildClearedSessionCookieOptions,
-  readValuationSession,
   toSessionUser
 } from '../../../../utils/valuationSession'
 import { fetchValuationMe } from '../../../../utils/valuationUpstream'
+import { ensureFreshValuationSession } from '../../../../utils/valuationRefresh'
 import { valuationCookieSecure, valuationUpstreamDeps } from '../../../../utils/valuationRuntime'
 
 export default defineEventHandler(async (event) => {
-  const session = readValuationSession(event)
+  // 页面渲染时的那一次会话校验也是续期时机：access 快过期就在这里轮换，
+  // 免得「打开页面还是登录态，点进历史页却 401」。
+  const { session } = await ensureFreshValuationSession(event, valuationUpstreamDeps(event), {
+    secure: valuationCookieSecure(event)
+  })
   if (!session) return { user: null }
 
   try {
