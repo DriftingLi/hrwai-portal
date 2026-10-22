@@ -12,6 +12,7 @@ import {
   stripValuationSessionCookie,
   toSessionUser,
   valuationSessionMaxAge,
+  valuationSessionNeedsRefresh,
   type ValuationSession
 } from '../valuationSession'
 
@@ -118,6 +119,31 @@ describe('路径口径', () => {
     expect(isBlockedValuationProxyPath('/api/valuation/admin/brands/1')).toBe(true)
     expect(isBlockedValuationProxyPath('/api/valuation/evaluations')).toBe(false)
     expect(isBlockedValuationProxyPath('/api/valuation/auth/me')).toBe(false)
+  })
+})
+
+describe('续期时机', () => {
+  const now = 1_700_000_000
+  const withExp = (exp: number, refreshToken = 'refresh.payload.sig') => ({
+    accessToken: jwtWithExp(exp),
+    refreshToken
+  })
+
+  it('剩余寿命低于 skew 才续期', () => {
+    expect(valuationSessionNeedsRefresh(withExp(now + 119), now, 120)).toBe(true)
+    expect(valuationSessionNeedsRefresh(withExp(now + 121), now, 120)).toBe(false)
+  })
+
+  it('已过期的 access 也算要续期（隔夜回来第一次请求就换）', () => {
+    expect(valuationSessionNeedsRefresh(withExp(now - 3600), now, 120)).toBe(true)
+  })
+
+  it('没有 refresh token 时不续期（没有可换的东西）', () => {
+    expect(valuationSessionNeedsRefresh(withExp(now, ''), now, 120)).toBe(false)
+  })
+
+  it('解不出 exp 时不续期（宁可用到上游 401，也不在每次请求上轮换）', () => {
+    expect(valuationSessionNeedsRefresh({ accessToken: 'opaque', refreshToken: 'r' }, now, 120)).toBe(false)
   })
 })
 
