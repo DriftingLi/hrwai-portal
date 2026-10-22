@@ -1,5 +1,33 @@
 import { describe, it, expect } from 'vitest'
-import { buildSubdomainUrl, buildSiteUrl } from '../siteUrl'
+import { buildServiceUrl, buildSubdomainUrl, buildSiteUrl } from '../siteUrl'
+
+// 训练站与残值评估分属两个域族后，入口用「基址 + 路径」拼，不再从门户域根推子域。
+describe('buildServiceUrl', () => {
+  it('根路径保留尾斜杠', () => {
+    expect(buildServiceUrl('https://training.gdyidao.cn', '/')).toBe('https://training.gdyidao.cn/')
+  })
+
+  it('子路径直接拼接', () => {
+    expect(buildServiceUrl('https://training.gdyidao.cn', '/ai-assistant')).toBe(
+      'https://training.gdyidao.cn/ai-assistant'
+    )
+  })
+
+  it('带路径前缀的基址（残值：门户同域 /valuation）', () => {
+    expect(buildServiceUrl('https://www.hrwai.cn/valuation', '/')).toBe('https://www.hrwai.cn/valuation/')
+    expect(buildServiceUrl('https://www.hrwai.cn/valuation', '/history')).toBe(
+      'https://www.hrwai.cn/valuation/history'
+    )
+  })
+
+  it('基址尾斜杠被归一', () => {
+    expect(buildServiceUrl('https://training.gdyidao.cn/', '/x')).toBe('https://training.gdyidao.cn/x')
+  })
+
+  it('基址缺失时退化为相对路径（本地开发）', () => {
+    expect(buildServiceUrl('', '/history')).toBe('/history')
+  })
+})
 
 describe('buildSubdomainUrl', () => {
   it('www 前缀站点生成功能子域', () => {

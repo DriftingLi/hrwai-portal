@@ -12,6 +12,13 @@ const siteUrl = buildSiteUrl('/', process.env.PORTAL_SITE_URL || '').replace(/\/
 // 不加 www 前缀亦可——buildSubdomainUrl 会自行剥离。
 const featureBase = (process.env.PORTAL_FEATURE_BASE || siteUrl).replace(/\/$/, '')
 
+// 功能入口分属两个域族（门户票 #32 后续 / FL 票 #1756 切换）：
+//   训练站 → training.gdyidao.cn（易道）；残值评估 → 和润域同域的 /valuation 路径。
+// 各自可配：残值域名 valuation.hrwai.cn 的证书就绪后，把 PORTAL_VALUATION_URL 改成
+// https://valuation.hrwai.cn/valuation 即可，代码不用动。
+const trainingBase = (process.env.PORTAL_TRAINING_URL || 'https://training.gdyidao.cn').replace(/\/+$/, '')
+const valuationBase = (process.env.PORTAL_VALUATION_URL || `${siteUrl}/valuation`).replace(/\/+$/, '')
+
 // ICP 备案号随域名变化：当前为 hrwai.cn 的备案号（2026-10 完成备案）；
 // 需要临时切换域名时可经 PORTAL_ICP 覆盖，留空则不输出备案信息。
 const icp = process.env.PORTAL_ICP ?? '粤ICP备2026161235号-1'
@@ -44,7 +51,9 @@ export default defineNuxtConfig({
   // ===== 运行时配置（部署时经环境变量覆盖） =====
   // NUXT_API_INTERNAL_BASE    SSR 直连后端的地址（dev 默认本机 8080）
   // PORTAL_SITE_URL           canonical/OG/sitemap 使用的站点地址（如 https://www.hrwai.cn）
-  // PORTAL_FEATURE_BASE       功能服务域根（training./valuation. 所在域）；缺省跟随站点地址
+  // PORTAL_FEATURE_BASE       旧口径：功能服务域根（仅 buildSubdomainUrl 仍在用）
+  // PORTAL_TRAINING_URL       训练站入口（缺省 https://training.gdyidao.cn）
+  // PORTAL_VALUATION_URL      残值评估入口（缺省 <siteUrl>/valuation；域名证书就绪后切子域）
   // PORTAL_ICP                页脚 ICP 备案号；缺省为当前站点备案号
   // NUXT_PUBLIC_BAIDU_VERIFICATION  百度站长验证码，留空则不输出验证 meta
   runtimeConfig: {
@@ -56,6 +65,8 @@ export default defineNuxtConfig({
     public: {
       siteUrl,
       featureBase,
+      trainingBase,
+      valuationBase,
       icp,
       baiduVerification: ''
     }
