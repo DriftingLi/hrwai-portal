@@ -134,6 +134,8 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'valuation-auth' })
+
 import { computed, reactive } from 'vue'
 import type { BatterySummary, EvaluationRecord } from '~/api/valuation'
 import {

@@ -391,6 +391,8 @@ interface FormState {
   mast_type?: string
   mast_height_mm?: number
   factory_year?: number
+  /** 成交年份：不进界面（评估的就是「现在这台车值多少」），但校验与提交都要它 */
+  sale_year: number
   usage_hours?: number
   province?: string
   city?: string
@@ -411,6 +413,7 @@ function initialState(): FormState {
     mast_type: undefined,
     mast_height_mm: undefined,
     factory_year: undefined,
+    sale_year: new Date().getFullYear(),
     usage_hours: undefined,
     province: undefined,
     city: undefined,
@@ -666,7 +669,20 @@ watch(
 )
 
 // ===== 提交 =====
-const isValid = computed(() => validateEvaluationForm({ ...form }).valid)
+/**
+ * 校验用的快照：把表单状态摊平成纯数据。
+ * `v-model.number` 在输入框清空后留下的是空串而不是 undefined——直接拿去校验会「看起来填了」，
+ * 到后端才报参数错误，所以这里统一归一到 undefined。
+ */
+function snapshot() {
+  const hours =
+    typeof form.usage_hours === 'number' && Number.isFinite(form.usage_hours)
+      ? form.usage_hours
+      : undefined
+  return { ...form, usage_hours: hours }
+}
+
+const isValid = computed(() => validateEvaluationForm(snapshot()).valid)
 
 /** 再次点击同一评级 = 取消选择（与旧 SPA 一致） */
 function onConditionSelect(rating: string) {
@@ -684,9 +700,8 @@ function buildPayload(): EvaluationRequest {
     mast_type: form.mast_type!,
     mast_height_mm: form.mast_height_mm!,
     factory_year: form.factory_year!,
-    // 成交年份不进界面：评估的就是「现在这台车值多少」
-    sale_year: currentYear,
-    usage_hours: form.usage_hours!,
+    sale_year: form.sale_year,
+    usage_hours: snapshot().usage_hours!,
     original_paint: form.original_paint,
     province: form.province!,
     city: form.city!,
@@ -699,7 +714,7 @@ function buildPayload(): EvaluationRequest {
 
 async function submit() {
   if (submitting.value) return
-  const check = validateEvaluationForm({ ...form })
+  const check = validateEvaluationForm(snapshot())
   if (!check.valid) {
     errorMessage.value = check.message || '请补全表单'
     return

@@ -1,6 +1,13 @@
 // @vitest-environment nuxt
 // 评估历史页测试（票 #32）：断言「给定上游列表 → 页面出现什么行/链接」。
 import { describe, it, expect, vi } from 'vitest'
+import { registerEndpoint } from '@nuxt/test-utils/runtime'
+
+// 受保护页面（history / report）走 valuation-auth 路由中间件：这里把会话端点桩成「已登录」，
+// 页面才能拿到自己的路由参数（未登录时中间件会先跳到 /valuation/login）。
+registerEndpoint('/__portal__/valuation/session', () => ({
+  user: { user_id: 1, account: 'u1', username: '测试用户', role: 'hrwai_user' }
+}))
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 
 const wholeRecord = {
