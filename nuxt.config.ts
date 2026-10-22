@@ -13,11 +13,11 @@ const siteUrl = buildSiteUrl('/', process.env.PORTAL_SITE_URL || '').replace(/\/
 const featureBase = (process.env.PORTAL_FEATURE_BASE || siteUrl).replace(/\/$/, '')
 
 // 功能入口分属两个域族（门户票 #32 后续 / FL 票 #1756 切换）：
-//   训练站 → training.gdyidao.cn（易道）；残值评估 → 和润域同域的 /valuation 路径。
-// 各自可配：残值域名 valuation.hrwai.cn 的证书就绪后，把 PORTAL_VALUATION_URL 改成
-// https://valuation.hrwai.cn/valuation 即可，代码不用动。
+//   训练站 → training.gdyidao.cn（易道）；残值评估 → valuation.hrwai.cn/valuation（和润）。
+// 两者各自可配（PORTAL_TRAINING_URL / PORTAL_VALUATION_URL），代码里给的是**当前可用的缺省值**。
+// 残值域名证书于 2026-10-22 就绪（/、/valuation、/api 实测全 200），故缺省已指向子域。
 const trainingBase = (process.env.PORTAL_TRAINING_URL || 'https://training.gdyidao.cn').replace(/\/+$/, '')
-const valuationBase = (process.env.PORTAL_VALUATION_URL || `${siteUrl}/valuation`).replace(/\/+$/, '')
+const valuationBase = (process.env.PORTAL_VALUATION_URL || 'https://valuation.hrwai.cn/valuation').replace(/\/+$/, '')
 
 // ICP 备案号随域名变化：当前为 hrwai.cn 的备案号（2026-10 完成备案）；
 // 需要临时切换域名时可经 PORTAL_ICP 覆盖，留空则不输出备案信息。
