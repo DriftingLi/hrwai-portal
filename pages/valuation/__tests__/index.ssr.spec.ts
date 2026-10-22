@@ -44,7 +44,7 @@ describe('整机残值评估页', () => {
     expect(html).toContain('林德')
     expect(html).toContain('广东省')
     expect(html).toContain('优')
-    expect(html).toContain('开始评估')
+    expect(html).toContain('提交评估')
     // 未登录：子导航给的是登录入口
     expect(html).toContain('/valuation/login')
     expect(html).not.toContain('退出')

@@ -415,6 +415,26 @@ export function createValuationApi(fetcher: ValuationFetcher) {
     listProvinces: () => get<string[]>(`${VALUATION_API_PREFIX}/dictionaries/provinces`),
     listCities: (province: string) =>
       get<string[]>(`${VALUATION_API_PREFIX}/dictionaries/cities`, pruneQuery({ province })),
+    // 出厂年份下拉的下限：按 品牌+车型+系列+吨位 查 active 原价表的 MIN(earliest_factory_year)。
+    // series 传「其它」时要当没传（后端忽略该条件做降级查询），匹配不到时后端返回 1980。
+    getEarliestFactoryYear: async (query: {
+      brand?: string
+      vehicleType?: string
+      series?: string
+      tonnage?: number | string
+    }): Promise<number> => {
+      const data = await get<{ earliest_factory_year: number }>(
+        `${VALUATION_API_PREFIX}/dictionaries/earliest-factory-year`,
+        pruneQuery({
+          brand: query.brand,
+          vehicle_type: query.vehicleType,
+          series: query.series,
+          tonnage: query.tonnage
+        })
+      )
+      const year = Number(data?.earliest_factory_year)
+      return Number.isFinite(year) && year > 0 ? year : 1980
+    },
 
     // ===== 整机评估 =====
     createEvaluation: (request: EvaluationRequest) =>

@@ -17,7 +17,7 @@
           class="field-input"
           type="text"
           maxlength="80"
-          placeholder="选填，如 48V-630Ah"
+          placeholder="选填，如 LFP-100Ah、NCM-50Ah"
           data-test="battery-model"
         />
       </label>
@@ -37,8 +37,19 @@
     </label>
 
     <div class="toolbar">
-      <button type="button" class="btn-ghost" data-test="load-sample" @click="loadSample">载入示例数据</button>
-      <button type="button" class="btn-ghost" data-test="reset" @click="reset">清空</button>
+      <input
+        ref="fileInput"
+        type="file"
+        accept=".json,application/json"
+        class="file-input"
+        data-test="cycles-file"
+        @change="onFileChange"
+      />
+      <button type="button" class="btn-ghost" data-test="upload-file" @click="fileInput?.click()">
+        上传 .json
+      </button>
+      <button type="button" class="btn-ghost" data-test="load-sample" @click="loadSample">加载示例</button>
+      <button type="button" class="btn-ghost" data-test="reset" @click="reset">重置</button>
       <span v-if="parseError" class="hint hint-error" data-test="parse-error">{{ parseError }}</span>
       <span v-else-if="parsedCycles.length > 0" class="hint hint-ok" data-test="parse-ok">
         已识别 {{ parsedCycles.length }} 个循环
@@ -74,6 +85,7 @@ const batteryTypeOptions: Array<{ value: BatteryType; label: string }> = [
 const batteryType = ref<BatteryType>('lfp')
 const batteryModel = ref('')
 const cyclesJson = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
 const parsedCycles = ref<BatteryCycle[]>([])
 const parseError = ref('')
 const submitError = ref('')
@@ -90,6 +102,21 @@ function parse() {
 function loadSample() {
   cyclesJson.value = JSON.stringify(buildSampleBatteryCycles(), null, 2)
   parse()
+}
+
+/** 读本地 .json 到文本框（旧 SPA 的「上传 .json」）——不直接提交，先让用户看一眼解析结果 */
+function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    cyclesJson.value = String(reader.result || '')
+    parse()
+  }
+  reader.readAsText(file, 'utf-8')
+  // 同一个文件连选两次也要能触发 change
+  input.value = ''
 }
 
 function reset() {
@@ -177,8 +204,13 @@ async function submit() {
   line-height: var(--leading-normal);
   resize: vertical;
 }
+/* 隐藏原生 file input：由「上传 .json」按钮代按，视觉与其他 ghost 按钮一致 */
+.file-input {
+  display: none;
+}
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
