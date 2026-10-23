@@ -34,7 +34,7 @@
     "@vue/test-utils": "^2.5.1",
     "happy-dom": "^20.11.2",
     "subset-font": "^2.9.0",
-    "typescript": "^5.8.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "vue-tsc": "^2.2.0"
   },
