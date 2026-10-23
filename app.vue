@@ -10,8 +10,10 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
+import { watch, onMounted } from 'vue'
 import { portalNav } from '~/config/portalNav'
+import { siteFontsHref } from '~/config/siteFonts'
+import { criticalCss } from '~/config/criticalCss'
 import { useSiteLinks } from '~/composables/useSiteLinks'
 
 const config = useRuntimeConfig()
@@ -81,8 +83,52 @@ if (siteBase) {
   })
 }
 
-// 字体改为自托管（nuxt.config css 数组引入 Space Grotesk / MiSans / JetBrains Mono），
-// 不再请求 Google Fonts（大陆访问不稳定，且 stylesheet 链接阻塞渲染）。
+// 首屏关键 CSS 内联进 <head>：HTML 一到就出正确的首帧（原因见 config/criticalCss.ts）
+useHead({
+  style: [
+    {
+      key: 'critical-css',
+      textContent: criticalCss,
+      // critical 别名 = 负权重，保证排在 Nuxt 注入的样式之前（后者可覆盖）
+      tagPriority: 'critical'
+    }
+  ]
+})
+
+/* ---------- 字体样式表：异步加载，不阻塞首屏 ----------
+   字体是自托管的（nuxt.config 注释），但 @font-face 声明有 400+ 条 unicode-range 切片，
+   塞进入口样式表会把它撑到 500KB+ 并拖住首屏渲染。这里改为：
+     - SSR 只发 preload（as=style）：与 HTML 并行下载、预热缓存，本身不阻塞渲染
+     - 水合完成后由下面的 onMounted 真正插入 <link rel="stylesheet">
+     - 浏览器不支持 JS 时由 <noscript> 兜底（此时才走阻塞路径，属于降级）
+   为什么不用更常见的「media="print" + onload 切 all」：unhead 在水合时会把 SSR 的
+   props 重新打到 DOM 上，media 会被改回 print，字体就永远不生效（实测只注册了 24 个
+   hero 面，而不是 475 个）。这个写法绕开 unhead 对 head 标签的接管。
+   文件由 scripts/gen-site-fonts.mjs 生成（内容哈希命名，可长缓存）。 */
+useHead({
+  link: [
+    {
+      key: 'site-fonts-preload',
+      rel: 'preload',
+      as: 'style',
+      href: siteFontsHref
+    }
+  ],
+  noscript: [
+    {
+      innerHTML: `<link rel="stylesheet" href="${siteFontsHref}">`,
+      tagPriority: 'critical'
+    }
+  ]
+})
+
+onMounted(() => {
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = siteFontsHref
+  link.dataset.siteFonts = 'true'
+  document.head.appendChild(link)
+})
 </script>
 
 <style scoped>

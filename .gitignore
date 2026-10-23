@@ -9,6 +9,14 @@ dist/
 coverage/
 *.log
 
+# ===== 字体样式表（scripts/gen-site-fonts.mjs 生成，prebuild/predev 自动重建） =====
+# 产物含 427 个内容哈希命名的 woff2（约 8MB），入库只会把仓库撑大；
+# 字体源文件在 node_modules（@fontsource/*、misans），重建即可复现
+public/fonts/site/
+public/fonts/site*.css
+# 注意：config/siteFonts.ts 是生成物但**要入库**——typecheck / 单测不经过 prebuild，
+# 没有它 app.vue 的 import 直接解析失败（两行常量，冲突时以重新生成的结果为准）
+
 # ===== 百度站长验证源文件（上传附件，不入版本库；线上用 public/ 那份） =====
 docs/baidu_verify_codeva-XN3yApWheb.html
 
@@ -20,6 +28,7 @@ deploy/portal.nginx.split.conf
 
 # ===== 计划与临时文档（本地协作产物，不入版本库） =====
 .zcode/
+.scratch/
 
 # ===== WorkBuddy 工作区数据（记忆、会话产物） =====
 .workbuddy/

@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { PortalNavItem } from '~/config/portalNav'
 
@@ -65,13 +65,27 @@ const route = useRoute()
 const scrolled = ref(false)
 const navbarHidden = ref(false)
 const mobileOpen = ref(false)
-const activeAnchor = ref('home')
+// 内容精选归档页（/news 及其分类子页）：导航指示器固定停在「内容精选」
+const NEWS_SECTION_PATH = /^\/news(\/|$)/
+const activeAnchor = ref(resolveRouteAnchor())
 let lastScrollY = 0
 // 导航点击触发的平滑滚动期间不隐藏导航条（避免锚点跳转后导航消失）
 let suppressHideUntil = 0
 
 // 非首页（浅色背景）时导航条常驻深色玻璃底，保证白色文字可读
 const isHome = computed(() => route.path === '/')
+
+/**
+ * 导航指示器的锚点来源：
+ * - 首页：随滚动位置实时切换（见 onScroll）
+ * - /news 归档页（含分类子页）：固定「内容精选」，不随滚动变化
+ * - 其它页面（详情页、评估页等）：沿用原行为，停在「首页」
+ */
+function resolveRouteAnchor(): string {
+  if (route.path === '/') return 'home'
+  if (NEWS_SECTION_PATH.test(route.path)) return 'featured'
+  return 'home'
+}
 
 function onScroll() {
   const y = window.scrollY
@@ -87,7 +101,8 @@ function onScroll() {
   }
   lastScrollY = y
 
-  // 更新当前活动锚点
+  // 更新当前活动锚点：仅首页按滚动位置判断；/news 等页面由路由固定，不被滚动覆盖
+  if (route.path !== '/') return
   const sections = ['hero', 'about', 'products', 'cooperation', 'service', 'featured', 'footer']
   for (const id of sections) {
     const el = document.getElementById(id)
@@ -130,12 +145,27 @@ async function handleNavClick(item: PortalNavItem) {
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' })
       activeAnchor.value = hash === 'footer' ? 'contact' : hash
+    } else if (hash === 'featured' && currentPath === '/') {
+      // 首页内容精选为空时区块不渲染（SectionFeatured 的 v-if）：停在首页时退回归档页，保证入口可用
+      await router.push('/news')
+      activeAnchor.value = 'featured'
     }
   } else {
     window.scrollTo({ top: 0, behavior: 'smooth' })
     activeAnchor.value = 'home'
   }
 }
+
+// 路由变化时重算指示器（离开首页后不再保留首页锚点的高亮）
+watch(
+  () => route.path,
+  (path) => {
+    activeAnchor.value = resolveRouteAnchor()
+    navbarHidden.value = false
+    // 回到首页时按当前滚动位置恢复区块高亮（push 完成后执行，避免被覆盖）
+    if (path === '/') nextTick(() => onScroll())
+  }
+)
 
 onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })

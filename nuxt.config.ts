@@ -87,25 +87,21 @@ export default defineNuxtConfig({
     disallow: ['/valuation']
   },
 
-  // ===== 全局样式（自托管字体 → 设计令牌 → 基础样式 → 文章正文） =====
-  // 字体全部自托管（替代 Google Fonts：大陆访问 fonts.googleapis 不稳定且 stylesheet 阻塞渲染）：
+  // ===== 全局样式（设计令牌 → 基础样式 → 文章正文） =====
+  // 这里只放**布局样式**：它们进入 Vite 的入口样式表 entry.*.css，而入口样式表是渲染
+  // 阻塞资源——首屏 paint 必须等它下载+解析完。字体声明（@font-face，含 400+ 条
+  // unicode-range 切片）体量是布局样式的几十倍，放进来会把这笔等待放大到秒级。
+  //
+  // 字体（自托管，替代 Google Fonts：大陆访问 fonts.googleapis 不稳定）：
   // - MiSans（小米，免费商用）：简中切片子集（unicode-range 按需加载），字重为 MiSans 自有标度
   //   （Regular=330/Demibold=450/Bold=630/Heavy=700），浏览器对标准 400/500/600/700 自动就近匹配
   // - Space Grotesk（OFL）：西文/数字展示字体；JetBrains Mono（OFL）：序号/年份等 mono 点缀
+  // 它们的 @font-face 由 scripts/gen-site-fonts.mjs 汇总成 public/fonts/site.<hash>.css，
+  // app.vue 以 preload + 异步 stylesheet 加载，不阻塞首屏（见该文件注释）。
   css: [
-    '@fontsource/space-grotesk/500.css',
-    '@fontsource/space-grotesk/600.css',
-    '@fontsource/space-grotesk/700.css',
-    '@fontsource/jetbrains-mono/500.css',
-    '@fontsource/jetbrains-mono/600.css',
-    '@fontsource/jetbrains-mono/700.css',
-    'misans/lib/Normal/MiSans-Regular.min.css',
-    'misans/lib/Normal/MiSans-Demibold.min.css',
-    'misans/lib/Normal/MiSans-Bold.min.css',
-    'misans/lib/Normal/MiSans-Heavy.min.css',
-    // hero 首屏关键字体子集（scripts/gen-hero-fonts.mjs 生成）：声明在包字体之后，
-    // 同码点后声明者生效——hero 文案码点改走稳定 URL 子集（public/fonts/hero/，
-    // 由 SiteHero preload），其余码点仍由上面的包字体按需加载
+    // hero 首屏关键字体子集（scripts/gen-hero-fonts.mjs 生成）：这条**必须**留在阻塞样式里，
+    // 否则首屏 hero 文案会先用系统字体渲染再跳成 MiSans（swap 二次闪变）。
+    // 24 个 @font-face 只有 4.9KB，代价可接受；其余 427 条走异步。
     '~/assets/css/hero-fonts.css',
     '~/assets/css/design-tokens.css',
     '~/assets/css/global.css',
