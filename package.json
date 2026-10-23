@@ -35,7 +35,7 @@
     "happy-dom": "^20.11.2",
     "subset-font": "^2.9.0",
     "typescript": "^5.8.0",
-    "vitest": "^4.1.10",
+    "vitest": "^5.0.5",
     "vue-tsc": "^2.2.0"
   },
   "allowScripts": {
