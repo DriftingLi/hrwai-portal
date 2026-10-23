@@ -9,12 +9,21 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 10
+    # include: scope 会自动追加 (deps)/(deps-dev)，prefix 里不要再写一遍，
+    # 否则提交信息会变成 chore(deps)(deps)：…
     commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
     labels:
       - "dependencies"
+    ignore:
+      # TS 7 是原生编译器，只导出 unstable/* API，不再提供 typescript/lib/tsc；
+      # vue-tsc（含最新 3.3.13）与 nuxt typecheck 都依赖经典编译器 API，装上即崩。
+      # 等 vue-tsc 支持 TS 7 后删掉这条，届时 Dependabot 会重新提 major。
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
     groups:
       minor-and-patch:
         applies-to: "version-updates"
@@ -33,8 +42,8 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 5
+    # actions 的 scope 也是 deps，带上会更像 chore(deps)；这里改用固定前缀 chore(ci)
     commit-message:
       prefix: "chore(ci)"
-      include: "scope"
     labels:
       - "dependencies"
