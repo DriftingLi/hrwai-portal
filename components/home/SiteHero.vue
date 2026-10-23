@@ -259,22 +259,22 @@ onBeforeUnmount(() => {
   justify-content: center;
   flex-wrap: wrap;
 }
-/* 入场 stagger：纯 CSS 动画，随首帧 paint 立即播放，不依赖 JS 水合 */
+/* 入场 stagger：纯 CSS 动画，随首帧 paint 立即播放，不依赖 JS 水合。
+   刻意只做位移、不做透明度：首帧就得出文案（opacity:0 起步会让首屏先空一下，
+   慢网下这段空窗能到 1s 量级），位移本身已足够表达「入场」。 */
 .hero-in {
-  animation: heroIn 0.55s var(--ease-out) both;
+  animation: heroIn 0.45s var(--ease-out) both;
 }
 .hero-in--1 { animation-delay: 0s; }
-.hero-in--2 { animation-delay: 0.12s; }
-.hero-in--3 { animation-delay: 0.24s; }
-.hero-in--4 { animation-delay: 0.36s; }
-.hero-in--5 { animation-duration: 0.6s; animation-delay: 0.9s; }
+.hero-in--2 { animation-delay: 0.06s; }
+.hero-in--3 { animation-delay: 0.12s; }
+.hero-in--4 { animation-delay: 0.18s; }
+.hero-in--5 { animation-duration: 0.5s; animation-delay: 0.28s; }
 @keyframes heroIn {
   from {
-    opacity: 0;
     transform: translateY(24px);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }

@@ -41,7 +41,9 @@ npm run build
 node .output/server/index.mjs
 ```
 
-- `edgeone.json`：EdgeOne Pages 构建配置（构建命令 / 安装命令 / Node 版本），见下节
+- `edgeone.json`：EdgeOne Pages 构建配置（构建命令 / 安装命令 / Node 版本 / 缓存头），见下节
+- `npm run gen:site-fonts`：从 `@fontsource/*` 与 `misans` 汇总 `@font-face` 到 `public/fonts/site.<hash>.css`
+  （`prebuild` / `predev` 自动执行，产物不入库）。字体包升级后重建即可，详见「首屏性能」一节
 
 ### 部署（腾讯云 EdgeOne Pages）
 
@@ -78,6 +80,56 @@ node .output/server/index.mjs
 > **迁移历史**：此前经 GitHub Actions 构建镜像 + SSH 部署到自托管 PVE（production=pve-02 / testing=pve-01）的方式已停用，
 > workflow、临时替换用的静态站（`yidao-static-site/`）以及全部服务器部署脚本（`deploy/`）均已删除。
 > 原 GitHub Secrets / Variables 与分支保护中的 `check` 状态检查、testing 部署要求同步取消。
+
+#### 缓存策略（`edgeone.json`）
+
+EdgeOne Pages 默认给所有静态资源下发 `Cache-Control: public, max-age=0, must-revalidate`——
+哪怕文件名带内容哈希也照样每次回源校验，等于把长缓存白白浪费。`edgeone.json` 按路径改写下发头：
+
+| 路径 | 下发头 | 依据 |
+| --- | --- | --- |
+| `/_nuxt/*` | `public, max-age=31536000, immutable` | 文件名含内容哈希，内容变则 URL 变 |
+| `/_nuxt/builds/*` | `public, max-age=0, must-revalidate` | Nuxt 的构建版本清单，**必须**实时（否则整站会指到旧 chunk） |
+| `/fonts/site/*` | `public, max-age=31536000, immutable` | 生成时按内容哈希命名（`scripts/gen-site-fonts.mjs`） |
+| `/fonts/hero/*` `/images/*` | `public, max-age=86400, stale-while-revalidate=604800` | URL 固定、内容会被替换，用一天缓存 + 一周 SWR 兜住更新 |
+| 其余（HTML） | 交给 SWR 路由规则：`s-maxage=60, stale-while-revalidate=31536000` | 见 `nuxt.config.ts` `routeRules`；**不要**在 `edgeone.json` 里覆盖，否则首页更新会滞后 |
+
+规则顺序敏感：`/_nuxt/builds/*` 必须排在 `/_nuxt/*` 之前（先匹配先生效）。`caches` 段同步声明
+边缘缓存时长，避免只改下发头、边缘仍按默认 TTL 回源。
+
+控制台无需再做任何缓存配置——上述规则随 `edgeone.json` 一起部署。**唯一的控制台步骤**是确认
+「项目设置 → 环境变量」中的 5 个变量（见上表），改完需重新部署一次才生效。
+
+> 排障：若线上某个 `/_nuxt/*` 资源仍返回 `max-age=0`，多半是命中了**部署前**的边缘缓存。
+> 在控制台「缓存刷新」里按 URL 刷一次即可；新部署的产物 URL 本身就变了，正常访问不受影响。
+
+### 首屏性能（为什么字体要异步加载）
+
+决策记录见 ADR-0003（`docs/adr/ADR-0003-first-paint-path.md`）。
+
+首页首帧曾经要先等一份 527KB 的入口样式表——其中 95% 是 `@font-face`（4 个 MiSans 字重 × 100 个
+`unicode-range` 切片 + 三个 @fontsource 包）。样式表是**渲染阻塞**资源，于是首屏白屏长达数秒。
+现在拆成三层：
+
+| 层 | 内容 | 加载方式 | 体量 |
+| --- | --- | --- | --- |
+| 内联关键 CSS | `:root` 两个颜色变量 + `html,body` 底色 + `.hero` 底色与满屏高度 | 内联进 `<head>`，随 HTML 首字节到达 | < 0.5KB |
+| 阻塞样式表 | 设计令牌 + 基础样式 + 文章正文 + hero 首屏字体子集 | `entry.*.css`，常规 `<link>` | ~29KB |
+| 异步字体样式表 | 其余 427 条 `@font-face` | SSR 只发 `preload`；水合后由 `onMounted` 插入 `<link rel="stylesheet">`；`<noscript>` 兜底 | ~360KB（gzip 125KB），**不阻塞渲染** |
+
+hero 首屏字体子集（`assets/css/hero-fonts.css`，24 条 / 4.9KB）刻意留在阻塞样式表里：它覆盖
+首屏文案的全部码点，去掉它 hero 标题会先用系统字体渲染再跳成 MiSans（swap 二次闪变）。
+其余字体异步到位，正文区在字体就绪前用系统字体，视觉上无感。
+
+实测（同机 A/B、同一份构建产物，150ms RTT / 1.6Mbps / 4× CPU 节流）：FCP **7432 / 7328ms → 2368 / 2524ms**；
+把全部样式表拦下时，改前首帧 `html/body` 是 `rgba(0,0,0,0)`（白屏），改后是 `rgb(248,250,252)`。
+
+改字体相关代码时的四条注意：
+
+1. 改 `nuxt.config.ts` 的 `css` 数组**不要**再把字体包加回去——那会把 360KB 重新塞进阻塞路径
+2. 改 hero 文案后重跑 `npm run gen:hero-fonts`（`scripts/gen-hero-fonts.mjs` 里的 `HERO_TEXT` 需同步）
+3. 改 `config/criticalCss.ts` 的颜色值时，必须同步 `assets/css/design-tokens.css`——`config/__tests__/criticalCss.spec.ts` 会校验两者一致
+4. 内联关键 CSS 里**不要用 ID 选择器**（写 `.hero` 而不是 `#hero`）：它先于入口样式表解析，但必须让 `.hero[data-v-xxx]` 能覆盖它（`100vh`/`100dvh` 双写就靠这条）
 
 ## 页面与路由
 
