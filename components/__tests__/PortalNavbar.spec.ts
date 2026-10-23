@@ -47,3 +47,65 @@ describe('顶部导航位置指示条', () => {
     }
   })
 })
+
+// 内容精选原先只能滚到首页区块，归档页没有点击入口；下拉是那条路径。
+describe('内容精选下拉', () => {
+  const EXPECTED = [
+    { label: '总览', href: '/news' },
+    { label: '公司动态', href: '/news/company' },
+    { label: '行业新闻', href: '/news/industry' },
+    { label: '产品资讯', href: '/news/product' },
+    { label: '政策法规', href: '/news/news' }
+  ]
+
+  async function mountNav(route: string) {
+    const wrapper = await mountSuspended(PortalNavbar, {
+      route,
+      props: { menuItems: portalNav }
+    })
+    const item = wrapper.findAll('.nav-item').find((li) => li.text().includes('内容精选'))
+    if (!item) throw new Error('找不到内容精选导航项')
+    return { wrapper, item }
+  }
+
+  it('默认收起', async () => {
+    const { item } = await mountNav('/')
+    expect(item.find('.nav-dropdown').classes()).not.toContain('open')
+  })
+
+  it('悬停展开，移开收起，子项是总览 + 四个分类', async () => {
+    const { item } = await mountNav('/')
+
+    await item.trigger('mouseenter')
+    expect(item.find('.nav-dropdown').classes()).toContain('open')
+
+    const links = item.findAll('.nav-dropdown-link')
+    expect(links.map((l) => l.text())).toEqual(EXPECTED.map((e) => e.label))
+    expect(links.map((l) => l.attributes('href'))).toEqual(EXPECTED.map((e) => e.href))
+
+    await item.trigger('mouseleave')
+    expect(item.find('.nav-dropdown').classes()).not.toContain('open')
+  })
+
+  it('键盘聚焦也展开（不能只有鼠标能用）', async () => {
+    const { item } = await mountNav('/')
+    await item.trigger('focusin')
+    expect(item.find('.nav-dropdown').classes()).toContain('open')
+  })
+
+  it('分类页里对应子项高亮', async () => {
+    const { item } = await mountNav('/news/company')
+    await item.trigger('mouseenter')
+    const active = item.findAll('.nav-dropdown-link').filter((l) => l.classes().includes('active'))
+    expect(active.map((l) => l.text())).toEqual(['公司动态'])
+  })
+
+  it('移动端菜单平铺同样的五个子项（无 hover 也能进归档页）', async () => {
+    const { wrapper } = await mountNav('/')
+    await wrapper.find('.hamburger').trigger('click')
+
+    const subLinks = wrapper.findAll('.mobile-sub-link')
+    expect(subLinks.map((l) => l.text())).toEqual(EXPECTED.map((e) => e.label))
+    expect(subLinks.map((l) => l.attributes('href'))).toEqual(EXPECTED.map((e) => e.href))
+  })
+})

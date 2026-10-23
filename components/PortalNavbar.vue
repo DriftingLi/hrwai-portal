@@ -15,13 +15,48 @@
 
       <!-- Desktop Nav -->
       <ul class="desktop-nav">
-        <li v-for="item in menuItems" :key="item.key">
+        <li
+          v-for="item in menuItems"
+          :key="item.key"
+          class="nav-item"
+          :class="{ 'has-children': hasChildren(item) }"
+          @mouseenter="openDropdown(item)"
+          @mouseleave="closeDropdown(item)"
+          @focusin="openDropdown(item)"
+          @focusout="onNavFocusOut($event, item)"
+        >
           <a
             :href="item.path"
             class="nav-link"
             :class="{ active: activeAnchor === item.key }"
+            :aria-haspopup="hasChildren(item) ? 'true' : undefined"
+            :aria-expanded="hasChildren(item) ? openKey === item.key : undefined"
             @click.prevent="handleNavClick(item)"
-          >{{ item.label }}</a>
+            @keydown.esc="closeDropdown(item)"
+          >{{ item.label }}<span
+            v-if="hasChildren(item)"
+            class="nav-caret"
+            :class="{ open: openKey === item.key }"
+            aria-hidden="true"
+          /></a>
+
+          <!-- 下拉：内容精选归档页入口（总览 + 各分类） -->
+          <div
+            v-if="hasChildren(item)"
+            class="nav-dropdown"
+            :class="{ open: openKey === item.key }"
+          >
+            <ul class="nav-dropdown-panel">
+              <li v-for="child in item.children ?? []" :key="child.key">
+                <NuxtLink
+                  :to="child.path"
+                  class="nav-dropdown-link"
+                  :class="{ active: isChildActive(child) }"
+                  @click="closeDropdowns"
+                >{{ child.label }}</NuxtLink>
+              </li>
+            </ul>
+          </div>
         </li>
       </ul>
 
@@ -41,13 +76,24 @@
     <!-- Mobile Menu -->
     <transition name="mobile-slide">
       <div v-if="mobileOpen" class="mobile-menu" :class="{ scrolled }">
-        <a
-          v-for="item in menuItems"
-          :key="item.key"
-          :href="item.path"
-          class="mobile-link"
-          @click.prevent="handleNavClick(item)"
-        >{{ item.label }}</a>
+        <template v-for="item in menuItems" :key="item.key">
+          <a
+            :href="item.path"
+            class="mobile-link"
+            @click.prevent="handleNavClick(item)"
+          >{{ item.label }}</a>
+          <!-- 移动端没有 hover：内容精选的子项直接平铺，点一下就到归档页 -->
+          <div v-if="hasChildren(item)" class="mobile-sub">
+            <NuxtLink
+              v-for="child in item.children ?? []"
+              :key="child.key"
+              :to="child.path"
+              class="mobile-sub-link"
+              :class="{ active: isChildActive(child) }"
+              @click="onMobileChildClick"
+            >{{ child.label }}</NuxtLink>
+          </div>
+        </template>
       </div>
     </transition>
   </nav>
@@ -56,7 +102,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import type { PortalNavItem } from '~/config/portalNav'
+import type { PortalNavChild, PortalNavItem } from '~/config/portalNav'
 
 defineProps<{ menuItems: PortalNavItem[] }>()
 
@@ -65,6 +111,8 @@ const route = useRoute()
 const scrolled = ref(false)
 const navbarHidden = ref(false)
 const mobileOpen = ref(false)
+// 当前展开的下拉项 key（悬停或键盘聚焦触发，同时只有一个）
+const openKey = ref<string | null>(null)
 // 内容精选区块：/news 归档页（含分类子页）+ /content 文章详情页。
 // 这两类页面的指示器都固定停在「内容精选」，不随滚动或具体文章变化。
 const NEWS_SECTION_PATH = /^\/(news|content)(\/|$)/
@@ -86,6 +134,41 @@ function resolveRouteAnchor(): string {
   if (route.path === '/') return 'home'
   if (NEWS_SECTION_PATH.test(route.path)) return 'featured'
   return 'home'
+}
+
+/* ---------- 内容精选下拉（桌面悬停 / 键盘聚焦，移动端平铺） ---------- */
+function hasChildren(item: PortalNavItem): boolean {
+  return (item.children?.length ?? 0) > 0
+}
+
+function openDropdown(item: PortalNavItem) {
+  if (hasChildren(item)) openKey.value = item.key
+}
+
+function closeDropdown(item: PortalNavItem) {
+  if (openKey.value === item.key) openKey.value = null
+}
+
+function closeDropdowns() {
+  openKey.value = null
+}
+
+/** 焦点离开整个 <li>（含下拉面板）时才收起，避免从父项 Tab 到子项时闪退 */
+function onNavFocusOut(event: FocusEvent, item: PortalNavItem) {
+  const next = event.relatedTarget as Node | null
+  const current = event.currentTarget as HTMLElement | null
+  if (!current || !next || !current.contains(next)) closeDropdown(item)
+}
+
+/** 子项高亮：仅精确匹配当前路由（分类归档页之间互不干扰） */
+function isChildActive(child: PortalNavChild): boolean {
+  return route.path === child.path
+}
+
+/** 移动端子项：点完收起菜单（NuxtLink 负责 SPA 跳转） */
+function onMobileChildClick() {
+  mobileOpen.value = false
+  closeDropdowns()
 }
 
 function onScroll() {
@@ -128,6 +211,7 @@ function goHome() {
 
 async function handleNavClick(item: PortalNavItem) {
   mobileOpen.value = false
+  closeDropdowns()
   if (!item.path) return
 
   // 解析路径与锚点
@@ -163,6 +247,7 @@ watch(
   (path) => {
     activeAnchor.value = resolveRouteAnchor()
     navbarHidden.value = false
+    closeDropdowns()
     // 回到首页时按当前滚动位置恢复区块高亮（push 完成后执行，避免被覆盖）
     if (path === '/') nextTick(() => onScroll())
   }
@@ -285,6 +370,79 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
+/* ---------- 内容精选下拉（桌面悬停/聚焦展开） ---------- */
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.nav-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 6px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  vertical-align: middle;
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+.nav-caret.open {
+  transform: rotate(180deg);
+}
+.nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  /* 视觉间距用 padding 顶出来：这块透明区域仍属面板，鼠标从链接移下来不会中途丢失 hover */
+  padding-top: 12px;
+  transform: translate(-50%, -4px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-default),
+              transform var(--duration-fast) var(--ease-default),
+              visibility var(--duration-fast);
+  z-index: calc(var(--z-sticky) + 1);
+}
+.nav-dropdown.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+.nav-dropdown-panel {
+  min-width: 176px;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-dark);
+  border: 1px solid var(--glass-border-dark);
+  box-shadow: 0 16px 40px rgba(2, 8, 23, 0.45);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+}
+.nav-dropdown-link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.nav-dropdown-link:hover,
+.nav-dropdown-link:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.nav-dropdown-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .hamburger {
   display: flex;
   flex-direction: column;
@@ -333,6 +491,24 @@ onUnmounted(() => {
 }
 .mobile-link:last-of-type {
   border-bottom: none;
+}
+/* 移动端没有 hover：内容精选的子项平铺在父项下面 */
+.mobile-sub {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-darker);
+}
+.mobile-sub-link {
+  display: block;
+  padding: 10px 0;
+  font-size: var(--text-base);
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+}
+.mobile-sub-link.active {
+  color: #fff;
+  font-weight: var(--font-semibold);
 }
 
 .mobile-slide-enter-active,
