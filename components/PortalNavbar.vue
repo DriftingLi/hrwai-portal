@@ -65,8 +65,9 @@ const route = useRoute()
 const scrolled = ref(false)
 const navbarHidden = ref(false)
 const mobileOpen = ref(false)
-// 内容精选归档页（/news 及其分类子页）：导航指示器固定停在「内容精选」
-const NEWS_SECTION_PATH = /^\/news(\/|$)/
+// 内容精选区块：/news 归档页（含分类子页）+ /content 文章详情页。
+// 这两类页面的指示器都固定停在「内容精选」，不随滚动或具体文章变化。
+const NEWS_SECTION_PATH = /^\/(news|content)(\/|$)/
 const activeAnchor = ref(resolveRouteAnchor())
 let lastScrollY = 0
 // 导航点击触发的平滑滚动期间不隐藏导航条（避免锚点跳转后导航消失）
@@ -78,8 +79,8 @@ const isHome = computed(() => route.path === '/')
 /**
  * 导航指示器的锚点来源：
  * - 首页：随滚动位置实时切换（见 onScroll）
- * - /news 归档页（含分类子页）：固定「内容精选」，不随滚动变化
- * - 其它页面（详情页、评估页等）：沿用原行为，停在「首页」
+ * - 内容精选区块（/news 归档页及其分类子页、/content 文章详情页）：固定「内容精选」
+ * - 其它页面（评估页等）：沿用原行为，停在「首页」
  */
 function resolveRouteAnchor(): string {
   if (route.path === '/') return 'home'
