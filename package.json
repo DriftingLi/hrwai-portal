@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@nuxt/test-utils": "^4.3.4",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.5",
     "@vue/test-utils": "^2.5.1",
     "happy-dom": "^20.11.2",
     "subset-font": "^2.9.0",
