@@ -60,11 +60,17 @@ describe('siteFontsHref', () => {
     expect(siteFontsHref).toMatch(/^\/fonts\/site\.[0-9a-f]{8}\.css$/)
   })
 
-  it('生成后文件存在且含 @font-face', () => {
+  it('生成后文件存在，且含四档 MiSans 字面与自托管 woff2 引用', () => {
     const file = join(repoRoot, 'public', siteFontsHref.replace(/^\//, ''))
     if (!existsSync(file)) return // 未跑 prebuild：跳过，不误报
     const css = readFileSync(file, 'utf8')
-    expect(css.match(/@font-face/g)?.length ?? 0).toBeGreaterThan(400)
+    // 切片条数随 misans 版本变化（4.x 约每字面 100 片，5.x 为官方 56 片），
+    // 所以校验「四档字面都在」这个真正的契约（见 scripts/font-weights.mjs），
+    // 条数只做兜底冒烟，防止生成物退化成空壳。
+    for (const weight of [400, 500, 600, 700]) {
+      expect(css).toContain(`font-family:'MiSans';font-style:normal;font-weight:${weight};`)
+    }
+    expect(css.match(/@font-face/g)?.length ?? 0).toBeGreaterThan(150)
     expect(css).toContain("url('/fonts/site/")
   })
 })

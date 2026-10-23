@@ -2,27 +2,23 @@
  * hero 文案变更后重跑 npm run gen:hero-fonts。
  * 声明在 nuxt.config css 数组中 misans/fontsource 之后：同码点后声明者生效，
  * 未覆盖码点仍由包字体（unicode-range 按需加载）提供，不会缺字形。 */
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.105.woff2') format('woff2');unicode-range:U+8015;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.108.woff2') format('woff2');unicode-range:U+53C9,U+5782;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.109.woff2') format('woff2');unicode-range:U+8F86;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.110.woff2') format('woff2');unicode-range:U+9A71;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.112.woff2') format('woff2');unicode-range:U+6DA6;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.113.woff2') format('woff2');unicode-range:U+63A2;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.114.woff2') format('woff2');unicode-range:U+57DF;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.115.woff2') format('woff2');unicode-range:U+5347,U+547D,U+667A;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.116.woff2') format('woff2');unicode-range:U+5411,U+5468,U+5DDE,U+6DF1,U+9886;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.117.woff2') format('woff2');unicode-range:U+671F,U+76F4,U+7A0B,U+7D22,U+7EA7,U+8F66,U+9650;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.118.woff2') format('woff2');unicode-range:U+4E0B,U+4EBA,U+4EE5,U+5168,U+516C,U+52A8,U+5316,U+53F8,U+548C,U+5929,U+5DE5,U+5E7F,U+6280,U+751F,U+79D1,U+80FD,U+FF08-FF09;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.119.woff2') format('woff2');unicode-range:U+20,U+41,U+49,U+2014,U+3002,U+6709,U+FF0C;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:330;font-display:swap;src:url('/fonts/hero/MiSans-Regular.latin.woff2') format('woff2');unicode-range:U+20,U+41,U+49,U+2014;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.108.woff2') format('woff2');unicode-range:U+53C9;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.113.woff2') format('woff2');unicode-range:U+D7;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.115.woff2') format('woff2');unicode-range:U+547D,U+6838;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.116.woff2') format('woff2');unicode-range:U+5468;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.117.woff2') format('woff2');unicode-range:U+671F,U+89E3,U+8F66;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.118.woff2') format('woff2');unicode-range:U+4E86,U+4EEC,U+5168,U+52A1,U+5FC3,U+6211,U+670D,U+751F;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.119.woff2') format('woff2');unicode-range:U+20,U+41,U+49;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:450;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.latin.woff2') format('woff2');unicode-range:U+20,U+41,U+49,U+D7;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/hero/MiSans-Heavy.112.woff2') format('woff2');unicode-range:U+6DA6;}
-@font-face{font-family:'MiSans';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/hero/MiSans-Heavy.118.woff2') format('woff2');unicode-range:U+4E0B,U+548C,U+5929;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.3a6e471c7bda67a3.0.woff2') format('woff2');unicode-range:U+20,U+2014,U+3002,U+4E0B,U+4EBA,U+4EE5,U+5168,U+516C,U+52A8,U+5411,U+548C,U+5929,U+5DE5,U+6709,U+751F,U+80FD,U+FF08-FF09,U+FF0C;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.e64b1471167de51a.1.woff2') format('woff2');unicode-range:U+5316,U+53F8,U+547D,U+671F,U+76F4,U+79D1,U+7A0B,U+8F66,U+9886;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.71975ee0d4e977eb.2.woff2') format('woff2');unicode-range:U+5468,U+5E7F,U+6280,U+6DF1,U+7EA7;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.05e17cc425fb41cf.3.woff2') format('woff2');unicode-range:U+5DDE,U+9650;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.665fe5dad64295f4.4.woff2') format('woff2');unicode-range:U+5347,U+57DF,U+63A2,U+667A,U+7D22;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.a6cde7cf4f99586b.6.woff2') format('woff2');unicode-range:U+6DA6;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.4255830dff41a2b8.7.woff2') format('woff2');unicode-range:U+8F86,U+9A71;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.c3370530f2ca5ae8.8.woff2') format('woff2');unicode-range:U+5782;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.559cdea23f826be0.9.woff2') format('woff2');unicode-range:U+8015;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.6451d88f7a6f5ac3.11.woff2') format('woff2');unicode-range:U+53C9;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/hero/MiSans-Regular.f06a173509fe9b65.50.woff2') format('woff2');unicode-range:U+41,U+49;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.bdf4a1a2cfbf93b3.0.woff2') format('woff2');unicode-range:U+20,U+4E86,U+4EEC,U+5168,U+5FC3,U+6211,U+751F;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.2943b12fc4acb179.1.woff2') format('woff2');unicode-range:U+52A1,U+547D,U+670D,U+671F,U+89E3,U+8F66;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.967f933bd2859ac3.2.woff2') format('woff2');unicode-range:U+5468;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.194b5a4df49b960c.4.woff2') format('woff2');unicode-range:U+6838;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.a4e39c619e95fcd3.11.woff2') format('woff2');unicode-range:U+53C9;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/hero/MiSans-Demibold.45ae9a0fb8221570.50.woff2') format('woff2');unicode-range:U+41,U+49,U+D7;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/hero/MiSans-Heavy.210748158f1821d2.0.woff2') format('woff2');unicode-range:U+4E0B,U+548C,U+5929;}
+@font-face{font-family:'MiSans';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/hero/MiSans-Heavy.ad4990511d2c064c.6.woff2') format('woff2');unicode-range:U+6DA6;}
 @font-face{font-family:'Space Grotesk';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/hero/space-grotesk-latin-700-normal.woff2') format('woff2');unicode-range:U+20,U+41,U+48-49,U+52,U+57;}

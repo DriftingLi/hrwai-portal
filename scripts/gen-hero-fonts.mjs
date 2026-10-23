@@ -7,10 +7,11 @@
 //   5. 生成 config/heroFonts.ts —— preload href 列表（SiteHero useHead 引用）
 //
 // hero 文案变更后需重跑：npm run gen:hero-fonts
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, statSync, rmSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import subsetFont from 'subset-font'
+import { applyWeightOverride } from './font-weights.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -80,6 +81,8 @@ function codePoints(text) {
 }
 
 const OUT_DIR = join(root, 'public', 'fonts', 'hero')
+// 重建前清空：字体包升级会换切片文件名（v5 起带内容哈希），不清会残留上一版的死文件
+rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 
 const jobs = [
@@ -119,12 +122,13 @@ for (const job of jobs) {
     totalBytes += subset.length
     preloadHrefs.push(`/fonts/hero/${name}`)
     cssBlocks.push(
-      `@font-face{font-family:'${job.family}';font-style:normal;font-weight:${face.weight};` +
+      `@font-face{font-family:'${job.family}';font-style:normal;` +
+        `font-weight:${applyWeightOverride(cssPath, face.weight)};` +
         `font-display:swap;src:url('/fonts/hero/${name}') format('woff2');` +
         `unicode-range:${formatRange(hit)};}`
     )
     console.log(
-      `  ${job.family} ${face.weight}  ${name}  ` +
+      `  ${job.family} ${applyWeightOverride(cssPath, face.weight)}  ${name}  ` +
         `${(statSync(srcPath).size / 1024).toFixed(1)}KB → ${(subset.length / 1024).toFixed(1)}KB  (${hit.length} 字形)`
     )
   }

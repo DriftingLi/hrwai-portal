@@ -93,8 +93,9 @@ export default defineNuxtConfig({
   // unicode-range 切片）体量是布局样式的几十倍，放进来会把这笔等待放大到秒级。
   //
   // 字体（自托管，替代 Google Fonts：大陆访问 fonts.googleapis 不稳定）：
-  // - MiSans（小米，免费商用）：简中切片子集（unicode-range 按需加载），字重为 MiSans 自有标度
-  //   （Regular=330/Demibold=450/Bold=630/Heavy=700），浏览器对标准 400/500/600/700 自动就近匹配
+  // - MiSans（小米，免费商用）：简中切片子集（unicode-range 按需加载）。misans 5 起包内按
+  //   标准 Web 标度声明（400/600/700/900），scripts/font-weights.mjs 在生成时重标注为本站
+  //   四档（400/500/600/700），令牌到字面的映射与升级前逐档一致
   // - Space Grotesk（OFL）：西文/数字展示字体；JetBrains Mono（OFL）：序号/年份等 mono 点缀
   // 它们的 @font-face 由 scripts/gen-site-fonts.mjs 汇总成 public/fonts/site.<hash>.css，
   // app.vue 以 preload + 异步 stylesheet 加载，不阻塞首屏（见该文件注释）。

@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, rmSyn
 import { createHash } from 'node:crypto'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { applyWeightOverride } from './font-weights.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -94,7 +95,8 @@ for (const rel of FONT_CSS) {
       totalBytes += buf.length
     }
     blocks.push(
-      `@font-face{font-family:'${face.family}';font-style:${face.style};font-weight:${face.weight};` +
+      `@font-face{font-family:'${face.family}';font-style:${face.style};` +
+        `font-weight:${applyWeightOverride(cssPath, face.weight)};` +
         `font-display:${face.display};src:url('/fonts/site/${name}') format('woff2');` +
         `unicode-range:${face.range};}`
     )
