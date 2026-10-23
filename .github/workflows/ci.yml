@@ -1,0 +1,64 @@
+name: CI
+
+# 轻量校验：只跑「装依赖 → 单测 → 类型检查 → 构建」这一条链，
+# 目标是在 Dependabot 的升级 PR 上给出绿灯/红灯，而不是做完整发布流水线。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的新提交直接取消上一轮，省 runner 时间
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 = package.json engines 的下限（>=22.12），24 = 当前 LTS；
+        # 两者都过，才说明依赖升级没有偷偷抬高运行时要求。
+        node: [22, 24]
+    env:
+      # 构建期必须有站点地址：sitemap / robots 预渲染要求 site.url 可解析
+      PORTAL_SITE_URL: https://www.hrwai.cn
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 构建
+        run: npm run build
+
+      # config/siteFonts.ts、assets/css/hero-fonts.css、public/fonts/hero/* 都是入库的生成物
+      # （prebuild 会重写）。字体包或脚本改了却忘了提交生成结果时，构建产物和仓库内容会分叉，
+      # 这里直接拦下来。
+      - name: 生成物未漂移
+        run: |
+          paths="config assets/css public/fonts"
+          if [ -n "$(git status --porcelain -- $paths)" ]; then
+            git status --porcelain -- $paths
+            git diff -- $paths | head -200
+            echo "::error::构建重写了已入库的生成物，请在本地跑 npm run build 后提交"
+            exit 1
+          fi
