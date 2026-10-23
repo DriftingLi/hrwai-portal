@@ -25,6 +25,14 @@ updates:
         update-types:
           - "version-update:semver-major"
     groups:
+      # 同一代的 Nuxt SEO 模块必须一起升：robots 7 + sitemap 8 实测会让构建报 EISDIR
+      # （两者分别依赖 nuxt-site-config 4 / 5）。所以这一对不按 major 拆分，永远合成一个 PR。
+      # 分组按顺序匹配，这条必须排在 *（minor-and-patch）之前。
+      nuxt-seo:
+        applies-to: "version-updates"
+        patterns:
+          - "@nuxtjs/robots"
+          - "@nuxtjs/sitemap"
       minor-and-patch:
         applies-to: "version-updates"
         patterns:
