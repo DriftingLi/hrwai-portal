@@ -36,7 +36,7 @@
     "subset-font": "^2.9.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.10",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^3.3.13"
   },
   "allowScripts": {
     "esbuild": true
