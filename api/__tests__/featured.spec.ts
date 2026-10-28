@@ -52,14 +52,16 @@ describe('featuredApi', () => {
 })
 
 describe('categoryLabel', () => {
-  it('四类映射正确', () => {
+  it('六类映射正确（含考情 / 公告）', () => {
     expect(categoryLabel('company')).toBe('公司动态')
     expect(categoryLabel('industry')).toBe('行业新闻')
     expect(categoryLabel('product')).toBe('产品资讯')
     expect(categoryLabel('news')).toBe('政策法规')
+    expect(categoryLabel('exam')).toBe('考情')
+    expect(categoryLabel('notice')).toBe('公告')
   })
 
-  it('未知分类回退「资讯」', () => {
+  it('未知分类回退「政策法规」', () => {
     expect(categoryLabel('unknown')).toBe('政策法规')
     expect(categoryLabel('')).toBe('政策法规')
   })

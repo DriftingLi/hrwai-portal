@@ -7,11 +7,13 @@ export const featuredCategoryLabels: Record<string, string> = {
   company: '公司动态',
   industry: '行业新闻',
   product: '产品资讯',
-  news: '政策法规'
+  news: '政策法规',
+  exam: '考情',
+  notice: '公告'
 }
 
 /** 分类 key 列表（归档页路由 /news/[category] 用） */
-export const featuredCategoryKeys = ['company', 'industry', 'product', 'news'] as const
+export const featuredCategoryKeys = ['company', 'industry', 'product', 'news', 'exam', 'notice'] as const
 
 /** 分类下拉选项（表单/页签用） */
 export const featuredCategoryOptions = featuredCategoryKeys.map((key) => ({
