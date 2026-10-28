@@ -55,7 +55,9 @@ describe('内容精选下拉', () => {
     { label: '公司动态', href: '/news/company' },
     { label: '行业新闻', href: '/news/industry' },
     { label: '产品资讯', href: '/news/product' },
-    { label: '政策法规', href: '/news/news' }
+    { label: '政策法规', href: '/news/news' },
+    { label: '考情', href: '/news/exam' },
+    { label: '公告', href: '/news/notice' }
   ]
 
   async function mountNav(route: string) {
@@ -73,7 +75,7 @@ describe('内容精选下拉', () => {
     expect(item.find('.nav-dropdown').classes()).not.toContain('open')
   })
 
-  it('悬停展开，移开收起，子项是总览 + 四个分类', async () => {
+  it('悬停展开，移开收起，子项是总览 + 六个分类', async () => {
     const { item } = await mountNav('/')
 
     await item.trigger('mouseenter')
@@ -100,7 +102,7 @@ describe('内容精选下拉', () => {
     expect(active.map((l) => l.text())).toEqual(['公司动态'])
   })
 
-  it('移动端菜单平铺同样的五个子项（无 hover 也能进归档页）', async () => {
+  it('移动端菜单平铺同样的七个子项（无 hover 也能进归档页）', async () => {
     const { wrapper } = await mountNav('/')
     await wrapper.find('.hamburger').trigger('click')
 
