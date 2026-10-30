@@ -4,6 +4,7 @@
     <SectionAbout />
     <SectionFounder />
     <SectionProducts />
+    <SectionForklift />
     <SectionTech />
     <SectionCooperation />
     <SectionMilestones />

@@ -131,6 +131,20 @@ export default defineNuxtConfig({
 
   // ===== 构建 =====
   vite: {
+    // Three.js 只在首页 3D 展台进入视口时才被动态 import；@vue/devtools-core、marked
+    // 也属于运行时才首次解析的依赖。Vite 在运行时发现新依赖会重新预构建并整页刷新
+    // （滚动到展台时页面会突然跳回顶部），因此把这些入口显式预打包。
+    optimizeDeps: {
+      include: [
+        '@vue/devtools-core',
+        'marked',
+        'three',
+        'three/addons/controls/OrbitControls.js',
+        'three/addons/environments/RoomEnvironment.js',
+        'three/addons/geometries/RoundedBoxGeometry.js',
+        'three/addons/lights/RectAreaLightUniformsLib.js'
+      ]
+    },
     build: {
       // rolldown-vite 用 lightningcss 压缩 CSS，会把 max-width: 767px 编译成 range 语法
       // (width<=767px)——旧浏览器/WebView（Chrome<104、部分国产内核）不支持 →
