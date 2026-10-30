@@ -31,6 +31,7 @@ export const portalNav: PortalNavItem[] = [
   { key: 'home', label: '首页', path: '/' },
   { key: 'about', label: '关于我们', path: '/#about' },
   { key: 'products', label: '核心服务', path: '/#products' },
+  { key: 'showcase', label: '3D展台', path: '/showcase' },
   { key: 'cooperation', label: '合作模式', path: '/#cooperation' },
   { key: 'service', label: '服务保障', path: '/#service' },
   { key: 'featured', label: '内容精选', path: '/#featured', children: featuredChildren },

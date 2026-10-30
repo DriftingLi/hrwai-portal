@@ -132,6 +132,7 @@ const isHome = computed(() => route.path === '/')
  */
 function resolveRouteAnchor(): string {
   if (route.path === '/') return 'home'
+  if (route.path === '/showcase') return 'showcase'
   if (NEWS_SECTION_PATH.test(route.path)) return 'featured'
   return 'home'
 }
@@ -237,7 +238,7 @@ async function handleNavClick(item: PortalNavItem) {
     }
   } else {
     window.scrollTo({ top: 0, behavior: 'smooth' })
-    activeAnchor.value = 'home'
+    activeAnchor.value = resolveRouteAnchor()
   }
 }
 
@@ -476,6 +477,12 @@ onUnmounted(() => {
 .mobile-menu {
   display: none;
   flex-direction: column;
+  /* 导航项 + 内容精选子项在手机上超过一屏：菜单内部滚动，别把「加入我们」截掉 */
+  max-height: calc(100vh - 60px);
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: var(--surface-dark);
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--color-border-darker);
@@ -521,7 +528,8 @@ onUnmounted(() => {
   transform: translateY(-8px);
 }
 
-@media (min-width: 768px) {
+/* 桌面导航在 1024px 起启用：8 个导航项（含 3D 展台）在 768–1023 会挤在一起 */
+@media (min-width: 1024px) {
   .desktop-nav {
     display: flex;
   }
@@ -539,7 +547,7 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .hamburger {
     display: flex;
   }

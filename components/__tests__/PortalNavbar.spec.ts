@@ -37,12 +37,16 @@ describe('顶部导航位置指示条', () => {
     expect(await activeLabels('/content/5')).toEqual(['内容精选'])
   })
 
+  it('/showcase：停在「3D展台」', async () => {
+    expect(await activeLabels('/showcase')).toEqual(['3D展台'])
+  })
+
   it('与内容精选无关的页面：回落到「首页」', async () => {
     expect(await activeLabels('/valuation')).toEqual(['首页'])
   })
 
   it('每次只有一个导航项被标为 active', async () => {
-    for (const route of ['/', '/news', '/content/5', '/valuation']) {
+    for (const route of ['/', '/news', '/content/5', '/showcase', '/valuation']) {
       expect(await activeLabels(route)).toHaveLength(1)
     }
   })
