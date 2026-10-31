@@ -5,7 +5,10 @@
       {{ eyebrow }}
     </p>
     <h1 class="showcase-title">
-      {{ title }} <span class="showcase-title-dot" aria-hidden="true">·</span> {{ accent }}
+      <template v-if="accent">
+        {{ title }} <span class="showcase-title-dot" aria-hidden="true">·</span> {{ accent }}
+      </template>
+      <template v-else>{{ title }}</template>
     </h1>
     <p class="showcase-subtitle">{{ subtitle }}</p>
   </header>
@@ -15,7 +18,7 @@
 defineProps<{
   eyebrow: string
   title: string
-  accent: string
+  accent?: string
   subtitle: string
 }>()
 </script>

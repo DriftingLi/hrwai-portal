@@ -2,8 +2,7 @@
   <ShowcasePageShell>
     <ShowcaseIntro
       eyebrow="3D Product Showcase"
-      title="车型"
-      accent="三维展台"
+      title="三维展台"
       subtitle="按实车比例构建的车型三维模型库。先通过卡片了解车型与关键参数，点击「在线预览」进入可交互展台。"
     />
 
@@ -29,18 +28,18 @@ const firstModel = SHOWCASE_MODELS[0]
 const ogImage = firstModel?.preview ?? '/images/hero-bg.webp'
 
 useSeoMeta({
-  title: '车型三维展台',
+  title: '三维展台',
   description:
-    '和润天下车型三维展台：以静态车型卡片快速了解核心参数，点击在线预览进入可交互 3D 展台，按实车比例查看车身、门架与结构细节。',
-  ogTitle: '车型三维展台',
+    '和润天下三维展台：通过静态车型卡片了解核心参数，点击在线预览进入可交互 3D 展台，按实车比例查看车身、门架与结构细节。',
+  ogTitle: '三维展台',
   ogDescription:
     '按实车比例构建的车型三维模型库，先从静态卡片了解车型，再进入可交互 3D 展台查看细节。',
   ogType: 'website',
   ogUrl: site('/showcase'),
   ogImage: site(ogImage),
-  ogImageAlt: firstModel?.previewAlt ?? '车型三维展台',
+  ogImageAlt: firstModel?.previewAlt ?? '三维展台',
   twitterCard: 'summary_large_image',
-  twitterTitle: '车型三维展台'
+  twitterTitle: '三维展台'
 })
 
 useHead({
@@ -61,7 +60,7 @@ useHead({
       children: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
-        name: '车型三维展台',
+        name: '三维展台',
         url: site('/showcase'),
         mainEntity: {
           '@type': 'ItemList',
