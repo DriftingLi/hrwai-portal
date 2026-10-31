@@ -227,8 +227,6 @@ export function createMastLabelTexture(): THREE.Texture {
   ctx.font = '600 24px Consolas, "Courier New", monospace'
   ctx.fillStyle = '#4a5260'
   ctx.fillText('MAX LOAD 1500 kg', 256, 548)
-  ctx.font = '600 20px Consolas, "Courier New", monospace'
-  ctx.fillText('SERIES CPD15-EX', 256, 584)
 
   ctx.textAlign = 'left'
   return toTexture(canvas)

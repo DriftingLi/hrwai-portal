@@ -31,7 +31,7 @@ export const FORKLIFT_VIEWS: readonly ForkliftViewPreset[] = [
   {
     id: 'side',
     label: '正侧面',
-    hint: '轴距与轮位',
+    hint: '车身与轮位',
     direction: [1, 0.13, 0.02],
     distance: 4.9
   },

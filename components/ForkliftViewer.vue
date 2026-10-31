@@ -58,7 +58,7 @@
 
       <template v-else>
         <p class="fv__loader-title">正在构建三维展台</p>
-        <p class="fv__loader-note">CPD15-Ex · 1.5 t 防爆蓄电池叉车</p>
+        <p class="fv__loader-note">防爆蓄电池叉车 · 实时三维模型</p>
         <div class="fv__loader-bar" aria-hidden="true"><span /></div>
       </template>
     </div>
@@ -67,8 +67,6 @@
       <div class="fv__brand" aria-hidden="true">
         <span class="fv__live-dot" />
         <span class="fv__brand-live">LIVE 3D</span>
-        <span class="fv__brand-sep" />
-        <span class="fv__brand-model">CPD15-Ex · 1.5 t</span>
       </div>
 
       <div class="fv__tools" role="group" aria-label="展台操作">
@@ -515,19 +513,6 @@ onBeforeUnmount(() => {
   color: var(--color-text-primary);
 }
 
-.fv__brand-sep {
-  width: 1px;
-  height: 12px;
-  background: rgba(15, 23, 42, 0.16);
-}
-
-.fv__brand-model {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--color-text-tertiary);
-}
-
 .fv__tools {
   position: absolute;
   top: 16px;
@@ -683,10 +668,6 @@ onBeforeUnmount(() => {
     left: 12px;
     height: 30px;
     padding: 0 10px;
-  }
-  .fv__brand-model,
-  .fv__brand-sep {
-    display: none;
   }
   .fv__tools {
     top: 12px;

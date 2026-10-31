@@ -15,7 +15,6 @@
     </div>
 
     <div class="showcase-card-body">
-      <p class="showcase-card-code">{{ model.code }} · {{ model.capacity }}</p>
       <h2 class="showcase-card-title">{{ model.name }}</h2>
       <p class="showcase-card-summary">{{ model.summary }}</p>
 
@@ -154,16 +153,6 @@ withDefaults(
   padding: 22px;
 }
 
-.showcase-card-code {
-  margin: 0 0 6px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: var(--font-semibold);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-primary-700);
-}
-
 .showcase-card-title {
   margin: 0;
   font-family: var(--font-display);
@@ -186,7 +175,7 @@ withDefaults(
 
 .showcase-card-specs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin: 18px 0 20px;
   padding-top: 16px;
@@ -269,23 +258,6 @@ withDefaults(
   }
   .showcase-card-title {
     font-size: 22px;
-  }
-}
-
-/* 极窄屏：三列参数会挤成多行，改成横向的键值行。 */
-@media (max-width: 359px) {
-  .showcase-card-specs {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-  .showcase-card-spec {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .showcase-card-spec dd {
-    margin-top: 0;
   }
 }
 

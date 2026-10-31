@@ -18,11 +18,10 @@
         </svg>
         全部车型
       </NuxtLink>
-      <span class="showcase-detail-code">{{ model.code }}</span>
     </div>
 
     <ShowcaseIntro
-      :eyebrow="`${model.code} · ${model.capacity} · EXPLOSION-PROOF`"
+      eyebrow="3D Product Showcase"
       :title="model.shortName"
       accent="三维展台"
       :subtitle="model.description"
@@ -100,8 +99,6 @@ useHead({
 .showcase-detail-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   max-width: 780px;
   min-height: 26px;
   margin: 0 auto 14px;
@@ -127,15 +124,6 @@ useHead({
   border-radius: var(--radius-sm);
   outline: 2px solid var(--color-primary-500);
   outline-offset: 3px;
-}
-
-.showcase-detail-code {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: var(--font-medium);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
 }
 
 .showcase-stage {

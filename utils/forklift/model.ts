@@ -1444,7 +1444,7 @@ export interface ForkliftModel {
 export function createForklift(): ForkliftModel {
   const materials = createMaterials()
   const group = new THREE.Group()
-  group.name = 'CPD15-EX forklift'
+  group.name = 'explosion-proof forklift'
 
   const body = buildBody(materials)
   const wheels = buildWheels(materials)

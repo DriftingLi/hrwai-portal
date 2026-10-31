@@ -24,4 +24,11 @@ describe('三维展台车型数据', () => {
     expect(findShowcaseModel('missing-model')).toBeUndefined()
     expect(findShowcaseModel(undefined)).toBeUndefined()
   })
+
+  it('卡片与详情参数都不展示轴距', () => {
+    for (const model of SHOWCASE_MODELS) {
+      const labels = [...model.cardSpecs, ...model.detailSpecs].map((spec) => spec.label)
+      expect(labels.some((label) => label.includes('轴距'))).toBe(false)
+    }
+  })
 })
