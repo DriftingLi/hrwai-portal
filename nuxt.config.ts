@@ -142,7 +142,10 @@ export default defineNuxtConfig({
         'three/addons/controls/OrbitControls.js',
         'three/addons/environments/RoomEnvironment.js',
         'three/addons/geometries/RoundedBoxGeometry.js',
-        'three/addons/lights/RectAreaLightUniformsLib.js'
+        'three/addons/libs/meshopt_decoder.module.js',
+        'three/addons/loaders/GLTFLoader.js',
+        'three/addons/lights/RectAreaLightUniformsLib.js',
+        'three/addons/utils/BufferGeometryUtils.js'
       ]
     },
     build: {

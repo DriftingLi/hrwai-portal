@@ -9,6 +9,7 @@
     }"
     role="group"
     aria-label="防爆叉车三维展台"
+    :aria-busy="!ready && !error"
   >
     <canvas
       ref="canvasRef"
@@ -21,7 +22,15 @@
     <div class="fv__vignette" aria-hidden="true" />
 
     <!-- 加载 / 错误遮罩 -->
-    <div v-if="!ready || error" class="fv__veil" :aria-hidden="ready || Boolean(error)">
+    <div v-if="!ready || error" class="fv__veil" :aria-hidden="ready && !error">
+      <img
+        v-if="props.poster"
+        class="fv__poster"
+        :src="props.poster"
+        alt=""
+        aria-hidden="true"
+      />
+
       <svg
         v-if="!error"
         class="fv__loader-art"
@@ -57,9 +66,19 @@
       </div>
 
       <template v-else>
-        <p class="fv__loader-title">正在构建三维展台</p>
+        <p class="fv__loader-title">正在加载三维模型</p>
         <p class="fv__loader-note">防爆蓄电池叉车 · 实时三维模型</p>
-        <div class="fv__loader-bar" aria-hidden="true"><span /></div>
+        <div
+          class="fv__loader-bar"
+          :class="{ 'is-determinate': progress > 0 }"
+          role="progressbar"
+          aria-label="模型加载进度"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-valuenow="progress > 0 ? progress : undefined"
+        >
+          <span :style="progress > 0 ? { width: `${progress}%` } : undefined" />
+        </div>
       </template>
     </div>
 
@@ -185,11 +204,17 @@ import { FORKLIFT_VIEWS, type ForkliftViewId } from '~/utils/forklift/views'
 import type { ForkliftSceneHandle } from '~/utils/forklift/scene'
 import { prefersReducedMotion } from '~/utils/motion'
 
+const props = defineProps<{
+  /** 加载遮罩/错误态下显示的静态预览图 */
+  poster?: string
+}>()
+
 const views = FORKLIFT_VIEWS
 const panelRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const sceneHandle = shallowRef<ForkliftSceneHandle | null>(null)
 const ready = ref(false)
+const progress = ref(0)
 const error = ref('')
 const activeView = ref<ForkliftViewId | null>('front34')
 const autoRotate = ref(false)
@@ -258,12 +283,18 @@ onMounted(async () => {
     const { createForkliftScene } = await import('~/utils/forklift/scene')
     if (unmounted) return
 
-    const handle = createForkliftScene({
+    const handle = await createForkliftScene({
       canvas,
       container: panel,
       reducedMotion: prefersReducedMotion(),
+      onProgress: (percent) => {
+        progress.value = Math.max(0, Math.min(100, percent))
+      },
       onReady: () => {
-        if (!unmounted) ready.value = true
+        if (!unmounted) {
+          progress.value = 100
+          ready.value = true
+        }
       },
       onViewChange: (id) => {
         activeView.value = id
@@ -279,9 +310,13 @@ onMounted(async () => {
     }
     sceneHandle.value = handle
   } catch (reason) {
+    if (unmounted) return
     console.error('[forklift] 3D 场景初始化失败', reason)
+    const code = (reason as { code?: string } | null)?.code
     error.value =
-      '当前浏览器可能未启用 WebGL，或图形设备暂时不可用。建议使用最新版 Chrome / Edge / Safari 打开。'
+      code === 'webgl'
+        ? '当前浏览器可能未启用 WebGL，或图形设备暂时不可用。建议使用最新版 Chrome / Edge / Safari 打开。'
+        : '三维模型加载失败，请检查网络连接后重试。'
   }
 })
 
@@ -376,6 +411,28 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.fv__poster {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.4;
+  filter: blur(10px) saturate(1.05);
+  transform: scale(1.05);
+  pointer-events: none;
+}
+
+.fv__loader-art,
+.fv__loader-title,
+.fv__loader-note,
+.fv__loader-bar,
+.fv__error {
+  position: relative;
+  z-index: 1;
+}
+
 .fv__loader-art {
   width: min(280px, 62%);
   height: auto;
@@ -424,6 +481,11 @@ onBeforeUnmount(() => {
   animation: fvLoad 1.15s var(--ease-default) infinite;
 }
 
+.fv__loader-bar.is-determinate span {
+  animation: none;
+  transition: width 0.2s linear;
+}
+
 @keyframes fvLoad {
   from { transform: translateX(-110%); }
   to { transform: translateX(260%); }
@@ -434,7 +496,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-width: 420px;
+  max-width: 440px;
+  padding: 20px 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .fv__error-title {

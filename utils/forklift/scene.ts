@@ -2,8 +2,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
-import { createForklift } from './model'
+import { loadForkliftModel, type ForkliftModel } from './model'
 import { FORKLIFT_VIEWS, type ForkliftViewId } from './views'
+import { disposeObject3D } from './dispose'
 import {
   createBackdropTexture,
   createContactShadowTexture,
@@ -13,6 +14,9 @@ import {
 /**
  * 防爆叉车 3D 展台：一束主光 + 环境贴图 + 轻雾地坪。
  * 只在客户端创建（组件挂载后动态 import 本模块），不参与 SSR。
+ *
+ * 模型来自 GLB，加载是异步的；加载完成后按 bbox 计算观察目标与镜头距离，
+ * 再渲染首帧并通知组件。移动端降低 DPR / 阴影分辨率，并关闭 RectAreaLight。
  */
 
 export type { ForkliftViewId, ForkliftViewPreset } from './views'
@@ -33,11 +37,12 @@ export interface ForkliftSceneOptions {
   container: HTMLElement
   reducedMotion?: boolean
   onReady?: () => void
+  onProgress?: (percent: number) => void
   onViewChange?: (id: ForkliftViewId | null) => void
   onAutoRotateChange?: (on: boolean) => void
 }
 
-const LOOK_TARGET = new THREE.Vector3(0, 0.9, 0.3)
+const INITIAL_TARGET = new THREE.Vector3(0, 0.9, 0.3)
 const MIN_POLAR = 0.16
 const MAX_POLAR = Math.PI / 2 - 0.035
 const INTRO_SCALE = 1.16
@@ -50,41 +55,37 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function disposeTree(root: THREE.Object3D) {
-  const geometries = new Set<THREE.BufferGeometry>()
-  const materials = new Set<THREE.Material>()
-  const textures = new Set<THREE.Texture>()
-
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh
-    if (!mesh.isMesh) return
-    if (mesh.geometry) geometries.add(mesh.geometry)
-    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-    for (const material of list) {
-      if (!material) continue
-      materials.add(material)
-      for (const value of Object.values(material)) {
-        if (value instanceof THREE.Texture) textures.add(value)
-      }
-    }
-  })
-
-  textures.forEach((texture) => texture.dispose())
-  geometries.forEach((geometry) => geometry.dispose())
-  materials.forEach((material) => material.dispose())
+function createSceneError(message: string, code: 'webgl' | 'model', cause?: unknown) {
+  const error = new Error(message) as Error & { code?: string; cause?: unknown }
+  error.code = code
+  if (cause !== undefined) error.cause = cause
+  return error
 }
 
-export function createForkliftScene(options: ForkliftSceneOptions): ForkliftSceneHandle {
+export async function createForkliftScene(
+  options: ForkliftSceneOptions
+): Promise<ForkliftSceneHandle> {
   const { canvas, container } = options
   const reducedMotion = options.reducedMotion ?? false
+  const isMobile =
+    window.matchMedia('(max-width: 767px)').matches ||
+    (navigator.maxTouchPoints ?? 0) > 1
+  const dprCap = isMobile ? 1.5 : 2
 
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    powerPreference: 'high-performance',
-    alpha: false
-  })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+  let renderer: THREE.WebGLRenderer
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+      alpha: false,
+      preserveDrawingBuffer: import.meta.dev
+    })
+  } catch (reason) {
+    throw createSceneError('WebGL 初始化失败', 'webgl', reason)
+  }
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 0.95
@@ -128,7 +129,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   scene.add(floor)
 
   const contactShadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(5.2, 2.5),
+    new THREE.PlaneGeometry(5.2, 3.4),
     new THREE.MeshBasicMaterial({
       map: createContactShadowTexture(),
       transparent: true,
@@ -138,7 +139,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
     })
   )
   contactShadow.rotation.x = -Math.PI / 2
-  contactShadow.position.set(0, 0.004, 0.3)
+  contactShadow.position.set(0, 0.004, 0.55)
   contactShadow.renderOrder = 1
   scene.add(contactShadow)
 
@@ -147,18 +148,18 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   const roomEnvironment = new RoomEnvironment()
   const environmentTarget = pmrem.fromScene(roomEnvironment, 0.04)
   scene.environment = environmentTarget.texture
-  scene.environmentIntensity = 0.48
+  scene.environmentIntensity = 0.55
   pmrem.dispose()
   const roomDisposable = roomEnvironment as unknown as { dispose?: () => void }
   roomDisposable.dispose?.()
 
   /* ---------------- 灯光 ---------------- */
 
-  const keyLight = new THREE.DirectionalLight(0xfff7ec, 3.3)
+  const keyLight = new THREE.DirectionalLight(0xfff7ec, 3.4)
   keyLight.position.set(4.4, 7.6, 5.4)
   keyLight.target.position.set(0, 0.5, 0.1)
   keyLight.castShadow = true
-  keyLight.shadow.mapSize.set(2048, 2048)
+  keyLight.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048)
   keyLight.shadow.camera.left = -5
   keyLight.shadow.camera.right = 5
   keyLight.shadow.camera.top = 5
@@ -175,23 +176,43 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   fillLight.position.set(-6, 4.2, 3.2)
   scene.add(fillLight)
 
-  const rimLight = new THREE.DirectionalLight(0xffffff, 1.15)
+  const rimLight = new THREE.DirectionalLight(0xffffff, 1.2)
   rimLight.position.set(-3.2, 4.6, -6.2)
   scene.add(rimLight)
 
   const ambient = new THREE.HemisphereLight(0xffffff, 0x8e99a6, 0.26)
   scene.add(ambient)
 
-  RectAreaLightUniformsLib.init()
-  const softbox = new THREE.RectAreaLight(0xffffff, 1.15, 6.4, 3.2)
-  softbox.position.set(1.2, 4.6, 3.6)
-  softbox.lookAt(0, 1.2, 0)
-  scene.add(softbox)
+  if (!isMobile) {
+    RectAreaLightUniformsLib.init()
+    const softbox = new THREE.RectAreaLight(0xffffff, 1.15, 6.4, 3.2)
+    softbox.position.set(1.2, 4.6, 3.6)
+    softbox.lookAt(0, 1.2, 0)
+    scene.add(softbox)
+  }
 
   /* ---------------- 车辆 ---------------- */
 
-  const forklift = createForklift()
+  let forklift: ForkliftModel
+  try {
+    forklift = await loadForkliftModel({ onProgress: options.onProgress })
+  } catch (reason) {
+    disposeObject3D(scene)
+    environmentTarget.dispose()
+    renderer.dispose()
+    throw createSceneError('三维模型加载失败', 'model', reason)
+  }
   scene.add(forklift.group)
+
+  const bounds = new THREE.Box3().setFromObject(forklift.group)
+  const size = bounds.getSize(new THREE.Vector3())
+  const lookTarget = new THREE.Vector3(
+    0,
+    bounds.min.y + size.y * 0.42,
+    bounds.min.z + size.z * 0.38
+  )
+  // 新模型比旧程序化模型高约 11%，统一放远一点，避免顶部被裁。
+  const fitScale = clamp(Math.max(size.y / 2.08, size.z / 3.66), 0.9, 1.2)
 
   /* ---------------- 相机控制 ---------------- */
 
@@ -206,7 +227,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   controls.rotateSpeed = 0.72
   controls.zoomSpeed = 0.9
   controls.autoRotateSpeed = 0.55
-  controls.target.copy(LOOK_TARGET)
+  controls.target.copy(INITIAL_TARGET)
   // 展台页是上下滚动页面：只接管水平拖拽，垂直手势继续滚页
   canvas.style.touchAction = 'pan-y'
 
@@ -238,10 +259,9 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   function viewPosition(id: ForkliftViewId, scale = 1) {
     const preset = FORKLIFT_VIEWS.find((item) => item.id === id) ?? FORKLIFT_VIEWS[0]!
     const direction = new THREE.Vector3(...preset.direction).normalize()
-    return LOOK_TARGET.clone().addScaledVector(
-      direction,
-      preset.distance * frameScale() * scale
-    )
+    return lookTarget
+      .clone()
+      .addScaledVector(direction, preset.distance * frameScale() * fitScale * scale)
   }
 
   function markView(id: ForkliftViewId | null) {
@@ -260,7 +280,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
       : null
     if (!tween) {
       camera.position.copy(to)
-      controls.target.copy(LOOK_TARGET)
+      controls.target.copy(lookTarget)
       controls.update()
     }
     markView(id)
@@ -310,7 +330,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
     const width = container.clientWidth || 640
     const height = container.clientHeight || 420
     const aspect = width / height
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap))
     renderer.setSize(width, height, false)
     camera.aspect = aspect
     camera.fov = clamp(38 + Math.max(0, 1.35 - aspect) * 20, 38, 53)
@@ -326,7 +346,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
       const progress = clamp((now - tween.start) / tween.duration, 0, 1)
       const eased = easeInOutCubic(progress)
       camera.position.lerpVectors(tween.from, tween.to, eased)
-      controls.target.copy(LOOK_TARGET)
+      controls.target.copy(lookTarget)
       if (progress >= 1) {
         tween = null
         camera.position.copy(viewPosition(activeView ?? 'front34'))
@@ -397,15 +417,19 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
     cancelAnimationFrame(raf)
     raf = 0
   }
+  const onContextRestored = () => {
+    renderer.shadowMap.needsUpdate = true
+    needsRender = true
+    updateRunning()
+  }
   canvas.addEventListener('webglcontextlost', onContextLost, false)
+  canvas.addEventListener('webglcontextrestored', onContextRestored, false)
 
   /* ---------------- 初始化 ---------------- */
 
   resize()
-  controls.maxPolarAngle = MAX_POLAR
-  controls.minPolarAngle = MIN_POLAR
+  controls.target.copy(lookTarget)
   camera.position.copy(viewPosition('front34', reducedMotion ? 1 : INTRO_SCALE))
-  controls.target.copy(LOOK_TARGET)
   controls.update()
   markView('front34')
 
@@ -428,6 +452,44 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
 
   updateRunning()
 
+  /* ---------------- dev 工具 ---------------- */
+
+  function captureSnapshot() {
+    const width = 828
+    const height = 621
+    const previousSize = renderer.getSize(new THREE.Vector2())
+    const previousPixelRatio = renderer.getPixelRatio()
+    const previousAspect = camera.aspect
+    const previousFov = camera.fov
+    const previousPosition = camera.position.clone()
+    const previousTarget = controls.target.clone()
+
+    renderer.setPixelRatio(1)
+    renderer.setSize(width, height, false)
+    camera.aspect = width / height
+    camera.fov = 38
+    camera.updateProjectionMatrix()
+    controls.target.copy(lookTarget)
+    camera.position.copy(viewPosition('front34'))
+    controls.update()
+    renderer.shadowMap.needsUpdate = true
+    renderer.render(scene, camera)
+
+    const data = renderer.domElement.toDataURL('image/png')
+
+    renderer.setPixelRatio(previousPixelRatio)
+    renderer.setSize(previousSize.x, previousSize.y, false)
+    camera.aspect = previousAspect
+    camera.fov = previousFov
+    camera.updateProjectionMatrix()
+    camera.position.copy(previousPosition)
+    controls.target.copy(previousTarget)
+    controls.update()
+    needsRender = true
+
+    return data
+  }
+
   if (import.meta.dev) {
     ;(window as unknown as Record<string, unknown>).__FORKLIFT_SCENE__ = {
       setView: (id: ForkliftViewId) => applyView(id),
@@ -439,6 +501,22 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
       zoomBy,
       getActiveView: () => activeView,
       getFps: () => fps,
+      stats: () => ({
+        calls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+        fps
+      }),
+      snapshot: captureSnapshot,
+      downloadPreview: () => {
+        const link = document.createElement('a')
+        link.href = captureSnapshot()
+        link.download = 'forklift-preview.png'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+      },
       camera,
       controls,
       renderer,
@@ -467,13 +545,16 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
       resizeObserver.disconnect()
       document.removeEventListener('visibilitychange', onVisibilityChange)
       canvas.removeEventListener('webglcontextlost', onContextLost)
+      canvas.removeEventListener('webglcontextrestored', onContextRestored)
       controls.removeEventListener('start', onControlsStart)
       controls.removeEventListener('change', onControlsChange)
       controls.dispose()
       if (import.meta.dev) {
         delete (window as unknown as Record<string, unknown>).__FORKLIFT_SCENE__
       }
-      disposeTree(scene)
+      scene.remove(forklift.group)
+      forklift.dispose()
+      disposeObject3D(scene)
       environmentTarget.dispose()
       renderer.dispose()
     }

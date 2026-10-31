@@ -28,7 +28,7 @@
     />
 
     <section class="showcase-stage" :aria-label="`${model.name}三维交互模型`">
-      <ForkliftViewer v-if="model.viewer === 'forklift'" />
+      <ForkliftViewer v-if="model.viewer === 'forklift'" :poster="model.preview" />
       <p v-else class="showcase-stage-fallback">该车型的三维展台正在接入。</p>
     </section>
 
@@ -40,7 +40,7 @@
     </dl>
 
     <p class="showcase-note" v-reveal="160">
-      模型依据参考图按比例重构，尺寸为外观示意值，不作为工程设计依据。
+      模型按实车比例制作，尺寸为外观示意值，不作为工程设计依据。
       光源、阴影与地面纹理均为实时渲染。
     </p>
   </ShowcasePageShell>

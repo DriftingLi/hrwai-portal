@@ -133,7 +133,9 @@ export function createSideDecalTexture(): THREE.Texture {
 /* ------------------------------------------------------------------ */
 
 export function createExBadgeTexture(): THREE.Texture {
-  const { canvas, ctx } = createCanvas(512, 512)
+  const { canvas, ctx } = createCanvas(256, 256)
+  // 仍按 512 的设计坐标绘制，整体缩到 256，贴花只有 0.1m，无需更高分辨率
+  ctx.scale(0.5, 0.5)
   const cx = 256
   const cy = 256
 
@@ -176,7 +178,8 @@ export function createExBadgeTexture(): THREE.Texture {
 /* ------------------------------------------------------------------ */
 
 export function createMastLabelTexture(): THREE.Texture {
-  const { canvas, ctx } = createCanvas(512, 640)
+  const { canvas, ctx } = createCanvas(256, 320)
+  ctx.scale(0.5, 0.5)
 
   roundRect(ctx, 8, 8, 496, 624, 22)
   ctx.fillStyle = '#f6f7f9'
@@ -237,7 +240,8 @@ export function createMastLabelTexture(): THREE.Texture {
 /* ------------------------------------------------------------------ */
 
 export function createDashTexture(): THREE.Texture {
-  const { canvas, ctx } = createCanvas(1024, 512)
+  const { canvas, ctx } = createCanvas(512, 256)
+  ctx.scale(0.5, 0.5)
 
   const bg = ctx.createLinearGradient(0, 0, 0, 512)
   bg.addColorStop(0, '#10161e')
@@ -317,7 +321,7 @@ export function createDashTexture(): THREE.Texture {
 /* ------------------------------------------------------------------ */
 
 export function createFloorTexture(): THREE.Texture {
-  const size = 2048
+  const size = 1024
   const { canvas, ctx } = createCanvas(size, size)
   const center = size / 2
   const metersRadius = 14 // 圆形地面半径 14m
@@ -383,7 +387,7 @@ export function createFloorTexture(): THREE.Texture {
 
   // 轻微颗粒，避免大面积渐变出现色带
   ctx.fillStyle = 'rgba(71, 85, 105, 0.035)'
-  for (let i = 0; i < 9000; i++) {
+  for (let i = 0; i < 3000; i++) {
     const x = Math.random() * size
     const y = Math.random() * size
     ctx.fillRect(x, y, 1.4, 1.4)
@@ -400,7 +404,8 @@ export function createFloorTexture(): THREE.Texture {
 /* ------------------------------------------------------------------ */
 
 export function createContactShadowTexture(): THREE.Texture {
-  const { canvas, ctx } = createCanvas(512, 512)
+  const { canvas, ctx } = createCanvas(256, 256)
+  ctx.scale(0.5, 0.5)
   const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 256)
   gradient.addColorStop(0, 'rgba(15, 23, 42, 0.72)')
   gradient.addColorStop(0.4, 'rgba(15, 23, 42, 0.48)')
