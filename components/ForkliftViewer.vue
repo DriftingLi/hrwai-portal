@@ -256,7 +256,7 @@ onMounted(async () => {
   }
 
   try {
-    // 关键：three.js 场景代码在进入视口后才动态加载，首屏不承担 3D 体积
+    // 关键：three.js 场景代码在组件挂载后才动态加载，列表页不承担 3D 体积
     const { createForkliftScene } = await import('~/utils/forklift/scene')
     if (unmounted) return
 

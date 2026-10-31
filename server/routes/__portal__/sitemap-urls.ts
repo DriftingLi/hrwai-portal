@@ -2,6 +2,7 @@
 // 构建期由 @nuxtjs/sitemap 调用；后端不可达时降级为静态路由，不阻断构建。
 import { $fetch } from 'ofetch'
 import type { Wrapped } from '~/api/featured'
+import { SHOWCASE_MODELS } from '~/utils/showcase/models'
 
 interface SitemapUrl {
   loc: string
@@ -17,6 +18,8 @@ interface FeaturedListData {
 const STATIC_URLS: SitemapUrl[] = [
   { loc: '/' },
   { loc: '/showcase' },
+  // 车型详情页跟随车型登记表生成，新增车型不用再改 sitemap
+  ...SHOWCASE_MODELS.map((model) => ({ loc: `/showcase/${model.slug}` })),
   { loc: '/news' },
   { loc: '/news/company' },
   { loc: '/news/industry' },

@@ -116,6 +116,8 @@ const openKey = ref<string | null>(null)
 // 内容精选区块：/news 归档页（含分类子页）+ /content 文章详情页。
 // 这两类页面的指示器都固定停在「内容精选」，不随滚动或具体文章变化。
 const NEWS_SECTION_PATH = /^\/(news|content)(\/|$)/
+// 三维展台：列表页 /showcase 与车型详情页 /showcase/<slug> 同属一个入口
+const SHOWCASE_PATH = /^\/showcase(\/|$)/
 const activeAnchor = ref(resolveRouteAnchor())
 let lastScrollY = 0
 // 导航点击触发的平滑滚动期间不隐藏导航条（避免锚点跳转后导航消失）
@@ -132,7 +134,7 @@ const isHome = computed(() => route.path === '/')
  */
 function resolveRouteAnchor(): string {
   if (route.path === '/') return 'home'
-  if (route.path === '/showcase') return 'showcase'
+  if (SHOWCASE_PATH.test(route.path)) return 'showcase'
   if (NEWS_SECTION_PATH.test(route.path)) return 'featured'
   return 'home'
 }
@@ -528,7 +530,7 @@ onUnmounted(() => {
   transform: translateY(-8px);
 }
 
-/* 桌面导航在 1024px 起启用：8 个导航项（含 3D 展台）在 768–1023 会挤在一起 */
+/* 桌面导航在 1024px 起启用：8 个导航项（3D 展台固定在最右）在 768–1023 会挤在一起 */
 @media (min-width: 1024px) {
   .desktop-nav {
     display: flex;

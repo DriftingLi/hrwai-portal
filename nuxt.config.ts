@@ -131,9 +131,9 @@ export default defineNuxtConfig({
 
   // ===== 构建 =====
   vite: {
-    // Three.js 只在首页 3D 展台进入视口时才被动态 import；@vue/devtools-core、marked
-    // 也属于运行时才首次解析的依赖。Vite 在运行时发现新依赖会重新预构建并整页刷新
-    // （滚动到展台时页面会突然跳回顶部），因此把这些入口显式预打包。
+    // Three.js 只在车型详情页挂载 3D 展台时才被动态 import；@vue/devtools-core、marked
+    // 也属于运行时才首次解析的依赖。Vite 在运行时发现新依赖会重新预构建并整页刷新，
+    // 因此把这些入口显式预打包。
     optimizeDeps: {
       include: [
         '@vue/devtools-core',

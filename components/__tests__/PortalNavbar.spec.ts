@@ -37,8 +37,12 @@ describe('顶部导航位置指示条', () => {
     expect(await activeLabels('/content/5')).toEqual(['内容精选'])
   })
 
-  it('/showcase：停在「3D展台」', async () => {
+  it('/showcase 列表页：停在「3D展台」', async () => {
     expect(await activeLabels('/showcase')).toEqual(['3D展台'])
+  })
+
+  it('/showcase 车型详情页：仍停在「3D展台」', async () => {
+    expect(await activeLabels('/showcase/explosion-proof-forklift')).toEqual(['3D展台'])
   })
 
   it('与内容精选无关的页面：回落到「首页」', async () => {
@@ -46,9 +50,25 @@ describe('顶部导航位置指示条', () => {
   })
 
   it('每次只有一个导航项被标为 active', async () => {
-    for (const route of ['/', '/news', '/content/5', '/showcase', '/valuation']) {
+    for (const route of [
+      '/',
+      '/news',
+      '/content/5',
+      '/showcase',
+      '/showcase/explosion-proof-forklift',
+      '/valuation'
+    ]) {
       expect(await activeLabels(route)).toHaveLength(1)
     }
+  })
+
+  it('「3D展台」固定在导航最右侧', async () => {
+    const wrapper = await mountSuspended(PortalNavbar, {
+      route: '/',
+      props: { menuItems: portalNav }
+    })
+    const labels = wrapper.findAll('.nav-link').map((link) => link.text())
+    expect(labels.at(-1)).toBe('3D展台')
   })
 })
 

@@ -207,7 +207,7 @@ export function createForkliftScene(options: ForkliftSceneOptions): ForkliftScen
   controls.zoomSpeed = 0.9
   controls.autoRotateSpeed = 0.55
   controls.target.copy(LOOK_TARGET)
-  // 首页是上下滚动页面：只接管水平拖拽，垂直手势继续滚页
+  // 展台页是上下滚动页面：只接管水平拖拽，垂直手势继续滚页
   canvas.style.touchAction = 'pan-y'
 
   let activeView: ForkliftViewId | null = 'front34'
