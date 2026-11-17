@@ -55,6 +55,10 @@ export interface FeaturedPage {
 /** 详情（含正文 markdown + 相关资讯 + 上/下一篇） */
 export interface FeaturedDetail extends FeaturedContent {
   content: string
+  /** 正文形态（2026-11）：markdown = 正文走 Markdown；docx = 导入的原始 Word */
+  content_type?: string
+  /** docx 正文的文件地址（仅 content_type=docx 时有值） */
+  docx_url?: string
   related?: FeaturedContent[]
   prev?: { content_id: number; title: string; category: string; published_at?: string | null } | null
   next?: { content_id: number; title: string; category: string; published_at?: string | null } | null

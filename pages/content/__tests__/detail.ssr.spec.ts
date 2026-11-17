@@ -38,17 +38,22 @@ const detailFixture = {
   next: { content_id: 6, title: '下一篇测试', category: 'company', published_at: '2026-07-30T10:00:00.000000' }
 }
 
+// 提出来供用例按需改返回（docx 分支要换一份 fixture）；factory 外提是 vi.mock 提升的硬要求
+const useFeaturedApiMock = vi.hoisted(() => ({
+  getPublicDetail: vi.fn(),
+  incrementView: vi.fn(),
+  getPublicList: vi.fn()
+}))
+
 vi.mock('~/composables/useFeaturedApi', () => ({
-  useFeaturedApi: () => ({
-    getPublicDetail: vi.fn().mockResolvedValue(detailFixture),
-    incrementView: vi.fn().mockResolvedValue({ content_id: 5, view_count: 11 }),
-    getPublicList: vi.fn()
-  })
+  useFeaturedApi: () => useFeaturedApiMock
 }))
 
 describe('内容详情页 SSR 输出', () => {
   beforeEach(() => {
     document.head.innerHTML = ''
+    useFeaturedApiMock.getPublicDetail.mockResolvedValue(detailFixture)
+    useFeaturedApiMock.incrementView.mockResolvedValue({ content_id: 5, view_count: 11 })
   })
 
   it('渲染文章标题/正文/分类/来源与上下一篇/相关资讯，hydration 后计数 +1', async () => {
@@ -87,5 +92,32 @@ describe('内容详情页 SSR 输出', () => {
       },
       { timeout: 3000 }
     )
+  })
+})
+
+// docx 正文（2026-11）：作者选「导入 Word」后，门户不再渲染 content，改在浏览器里
+// 用 docx-preview 还原原始 Word。守两件：SSR 期不能崩（只认 DOM 的库不许在服务端跑）、
+// 正文也不能两者都渲染（否则读者会看到一段空 content + 一份文档）。
+describe('内容详情页 docx 正文', () => {
+  it('content_type=docx：走 ClientOnly + DocxDocument，不渲染 markdown 正文', async () => {
+    const docxFixture = {
+      ...detailFixture,
+      content_type: 'docx',
+      content: '',
+      docx_url: '/static/uploads/featured/docx/plan_1700000000000.docx'
+    }
+    vi.mocked(useFeaturedApiMock.getPublicDetail).mockResolvedValue(docxFixture as never)
+
+    const page = await import('~/pages/content/[id].vue')
+    // 用不同 id：useAsyncData 按 `featured-detail-<id>` 缓存，同 id 会复用上面两条用例的 markdown 结果
+    const wrapper = await mountSuspended(page.default as any, { route: '/content/6' })
+    const html = wrapper.html()
+
+    // docx-preview 不在 SSR 期执行：正文区出的是加载骨架，且不出现 markdown 渲染结果
+    expect(html).toContain('docx-document')
+    expect(html).toContain('docx-skeleton')
+    expect(html).not.toContain('<p>正文段落内容</p>')
+    // Markdown 正文容器整体让位（断言 class 属性，避开模板注释里同名的文字）
+    expect(html).not.toContain('class="markdown-body"')
   })
 })

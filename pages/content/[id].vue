@@ -40,7 +40,18 @@
           <article class="article-main">
             <!-- 移动端折叠目录（<1024px 显示） -->
             <ArticleToc :items="toc" variant="mobile" />
-            <div class="markdown-body" v-html="renderedContent"></div>
+            <!--
+              正文按形态分叉（2026-11）：markdown 走服务端渲染的 .markdown-body；
+              docx 走 docx-preview 直接渲染原始 Word —— 它必须在浏览器里跑（只认 DOM），
+              故套 ClientOnly：SSR 期出的是加载骨架，正文体积不进首屏 HTML。
+            -->
+            <ClientOnly v-if="isDocx">
+              <DocxDocument :src="resolveFileUrl(detail.docx_url)" />
+              <template #fallback>
+                <div class="docx-fallback" aria-hidden="true" />
+              </template>
+            </ClientOnly>
+            <div v-else class="markdown-body" v-html="renderedContent"></div>
 
             <!-- 分享 -->
             <div class="article-share">
@@ -171,8 +182,11 @@ onMounted(async () => {
 
 const renderedContent = computed(() => renderMarkdown(detail.value?.content ?? ''))
 
-// 文章目录（h2/h3 锚点，id 由 renderMarkdown 注入）
-const toc = computed(() => extractToc(renderedContent.value))
+/** 正文是否为导入的原始 Word（2026-11）：是则换 docx-preview 渲染，不看 content */
+const isDocx = computed(() => detail.value?.content_type === 'docx' && Boolean(detail.value?.docx_url))
+
+// 文章目录（h2/h3 锚点，id 由 renderMarkdown 注入）；docx 正文没有可提取的标题锚点
+const toc = computed(() => (isDocx.value ? [] : extractToc(renderedContent.value)))
 
 // ===== 阅读进度条（scroll → 文章区域滚动比例） =====
 const progress = ref(0)
@@ -634,5 +648,12 @@ useHead({
   .nav-next {
     text-align: left;
   }
+}
+
+/* docx 正文档位（2026-11）：ClientOnly 的 SSR 占位，与正文区同高避免布局跳动 */
+.docx-fallback {
+  min-height: 480px;
+  border-radius: 8px;
+  background-color: #f5f7fa;
 }
 </style>
