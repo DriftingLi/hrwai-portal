@@ -56,6 +56,17 @@ describe('代理头策略（估值）', () => {
     expect(plan.headers).not.toHaveProperty('x-origin-token')
   })
 
+  it('浏览器 Origin 一律抹掉：服务端到服务端的代理不该透传浏览器 Origin', () => {
+    // 估值域（valuation.hrwai.cn）经 BFF 回源到后端时，若把浏览器 Origin 原样转发，
+    // 后端 Host 是回源域，Origin≠Host 触发 CORS 白名单校验，和润域不在名单里 → 403。
+    // 抹掉 Origin 后后端 CORS 直接放行，走正常鉴权。
+    const valuation = planValuationProxy({ path: '/api/valuation/evaluations', session })
+    expect(valuation.dropRequestHeaders).toContain('origin')
+
+    const other = planValuationProxy({ path: '/api/featured-contents', session: null })
+    expect(other.dropRequestHeaders).toContain('origin')
+  })
+
   it('请求没有 Cookie 头时不补一个空 Cookie 头', () => {
     const plan = planValuationProxy({ path: '/api/valuation/evaluations', session })
     expect(plan.headers).not.toHaveProperty('cookie')
