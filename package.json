@@ -21,7 +21,7 @@
     "@nuxtjs/robots": "^7.0.2",
     "@nuxtjs/sitemap": "^9.1.0",
     "docx-preview": "^0.4.1",
-    "marked": "^18.2.0",
+    "marked": "^18.2.1",
     "misans": "^5.0.0",
     "nuxt": "^4.6.4",
     "ofetch": "^1.4.1",
@@ -34,11 +34,11 @@
     "@nuxt/test-utils": "^4.4.0",
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
-    "@vue/test-utils": "^2.5.1",
+    "@vue/test-utils": "^2.6.0",
     "happy-dom": "^21.0.4",
     "subset-font": "^2.9.0",
     "typescript": "^5.9.3",
-    "vitest": "^5.1.0",
+    "vitest": "^5.1.1",
     "vue-tsc": "^3.3.14"
   },
   "allowScripts": {
