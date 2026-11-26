@@ -41,6 +41,7 @@ defineProps<{ item: FeaturedContent }>()
 
 <style scoped>
 .news-card {
+  height: 100%;
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -54,7 +55,9 @@ defineProps<{ item: FeaturedContent }>()
   border-color: var(--color-primary-300);
 }
 .news-card__link {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   text-decoration: none;
   color: inherit;
 }
@@ -97,6 +100,7 @@ defineProps<{ item: FeaturedContent }>()
 .news-card__body {
   padding: var(--space-6);
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-3);
 }
