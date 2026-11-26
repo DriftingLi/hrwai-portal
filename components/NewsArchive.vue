@@ -51,7 +51,7 @@ const sort = computed(() => {
 })
 
 const { data: list } = await useAsyncData(
-  `news-list-${activeKey.value}-${page.value}-${sort.value}`,
+  () => `news-list-${activeKey.value}-${page.value}-${sort.value}`,
   () =>
     getPublicList({
       page: page.value,
