@@ -34,6 +34,7 @@ useSeoMeta({
   ogDescription: computed(() => `和润天下内容精选 — ${categoryTitle.value}。`),
   ogType: 'website',
   ogUrl: computed(() => site(`/news/${category.value}`)),
+  ogImage: computed(() => site('/images/hero-bg.webp')),
   twitterCard: 'summary_large_image'
 })
 

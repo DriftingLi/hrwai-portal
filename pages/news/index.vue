@@ -23,6 +23,7 @@ useSeoMeta({
   ogDescription: '和润天下内容精选 — 公司动态、行业新闻、产品资讯与资讯。',
   ogType: 'website',
   ogUrl: site('/news'),
+  ogImage: site('/images/hero-bg.webp'),
   twitterCard: 'summary_large_image'
 })
 

@@ -148,6 +148,7 @@ import { categoryLabel, type FeaturedDetail } from '~/api/featured'
 import { resolveFileUrl } from '~/utils/fileUrl'
 import { renderMarkdown, extractToc } from '~/utils/markdown'
 import { formatDate } from '~/utils/formatDate'
+import { seoDescription } from '~/utils/seo'
 import { useSiteLinks } from '~/composables/useSiteLinks'
 import { useFeaturedApi } from '~/composables/useFeaturedApi'
 
@@ -231,7 +232,8 @@ onBeforeUnmount(() => {
 
 // ===== 文章级 SEO（标题/描述/OG/Article 结构化数据/canonical）=====
 const articleTitle = computed(() => detail.value?.title ?? '')
-const articleSummary = computed(() => detail.value?.summary || '')
+// 摘要规整为 SEO 描述：折叠换行、按码点截断（搜索引擎摘要只展示前 ~160 字）
+const articleSummary = computed(() => seoDescription(detail.value?.summary))
 const articleImage = computed(() =>
   detail.value?.cover_image ? resolveFileUrl(detail.value.cover_image) : site('/images/hero-bg.webp')
 )
@@ -261,7 +263,7 @@ useHead({
               '@context': 'https://schema.org',
               '@type': 'Article',
               headline: detail.value.title,
-              description: detail.value.summary,
+              description: articleSummary.value,
               image: articleImage.value,
               datePublished: articlePublished.value,
               author: { '@type': 'Organization', name: '和润天下（广州）人工智能科技有限公司' },
