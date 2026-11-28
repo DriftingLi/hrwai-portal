@@ -18,6 +18,8 @@ const featureBase = (process.env.PORTAL_FEATURE_BASE || siteUrl).replace(/\/$/, 
 // 残值域名证书于 2026-10-22 就绪（/、/valuation、/api 实测全 200），故缺省已指向子域。
 const trainingBase = (process.env.PORTAL_TRAINING_URL || 'https://training.gdyidao.cn').replace(/\/+$/, '')
 const valuationBase = (process.env.PORTAL_VALUATION_URL || 'https://valuation.hrwai.cn/valuation').replace(/\/+$/, '')
+// 参考试算默认关闭；门户开关只决定是否发起请求，FL 的关闭策略仍是最终权威。
+const valuationTrialEnabled = process.env.NUXT_PUBLIC_VALUATION_TRIAL_ENABLED === 'true'
 
 // ICP 备案号随域名变化：当前为 hrwai.cn 的备案号（2026-10 完成备案）；
 // 需要临时切换域名时可经 PORTAL_ICP 覆盖，留空则不输出备案信息。
@@ -56,6 +58,7 @@ export default defineNuxtConfig({
   // PORTAL_VALUATION_URL      残值评估入口（缺省 <siteUrl>/valuation；域名证书就绪后切子域）
   // PORTAL_ICP                页脚 ICP 备案号；缺省为当前站点备案号
   // NUXT_PUBLIC_BAIDU_VERIFICATION  百度站长验证码，留空则不输出验证 meta
+  // NUXT_PUBLIC_VALUATION_TRIAL_ENABLED  参考试算门户开关；仅精确 true 开启，默认 false
   runtimeConfig: {
     apiInternalBase: process.env.NUXT_API_INTERNAL_BASE || 'http://127.0.0.1:8080',
     // 回源鉴权 token（票 FL#1746）：/api 代理回源时带 X-Origin-Token，源站 nginx 只有
@@ -67,6 +70,7 @@ export default defineNuxtConfig({
       featureBase,
       trainingBase,
       valuationBase,
+      valuationTrialEnabled,
       icp,
       baiduVerification: ''
     }

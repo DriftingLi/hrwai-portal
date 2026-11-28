@@ -18,6 +18,7 @@ Nuxt 4 + TypeScript + Nitro（standalone）+ Vitest + marked（服务端 Markdow
 | `NUXT_API_INTERNAL_BASE` | 是 | SSR 直连后端内部地址（docker 网络 `http://backend:8080`，本地 `http://127.0.0.1:8080`）；浏览器请求经同源 `/api` 代理转发同一后端；估值 BFF 的登录/当前用户也走这个地址 |
 | `PORTAL_SITE_URL` | 部署时建议 | canonical / OG / sitemap 使用的 www 站点地址（如 `https://www.example.com`）；未配置则输出相对路径 |
 | `NUXT_PUBLIC_BAIDU_VERIFICATION` | 可选 | 百度站长平台验证码；留空不输出验证 meta |
+| `NUXT_PUBLIC_VALUATION_TRIAL_ENABLED` | 可选 | 参考试算门户开关；默认 `false`，仅精确 `true` 开启。FL 返回关闭策略（403 或 `needs_info` 策略原因）时门户仍不绕过 |
 
 ## 本地开发
 
