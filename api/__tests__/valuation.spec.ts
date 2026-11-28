@@ -6,10 +6,13 @@ import {
   batteryTypeLabels,
   createValuationApi,
   evaluationReportPath,
+  EXPLANATION_REQUEST_TIMEOUT_MS,
   valuationErrorMessage,
   valuationErrorStatus,
+  ValuationApiError,
   type ValuationFetcher,
-  type ValuationRequestInit
+  type ValuationRequestInit,
+  type EvaluationRequest
 } from '../valuation'
 
 const wrapped = <T>(data: T) => ({ code: 200, message: 'success', data })
@@ -184,6 +187,347 @@ describe('整机评估端点', () => {
   })
 })
 
+describe('对话草稿端点路径', () => {
+  it('创建、读取、修改、撤回与删除都走 FL 约定端点', async () => {
+    const { api, calls } = setup(() => wrapped({}))
+    await api.createConversationDraft({ fields: {}, supplemental: {} })
+    await api.getConversationDraft('draft-1')
+    await api.updateConversationDraft('draft-1', { base_version: 2, fields: {} })
+    await api.undoConversationDraft('draft-1', { base_version: 2 })
+    await api.deleteConversationDraft('draft-1')
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/drafts',
+        init: { method: 'POST', body: { fields: {}, supplemental: {} } }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: { method: 'GET' }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: { method: 'PATCH', body: { base_version: 2, fields: {} } }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1/undo',
+        init: { method: 'POST', body: { base_version: 2 } }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: { method: 'DELETE' }
+      }
+    ])
+  })
+
+  it('建议提交使用 FL 的 operation_id/base_version/text，并接受 202 信封', async () => {
+    const operation = {
+      id: 'op:draft-1:suggestion-1', kind: 'suggestion', operation_id: 'op:draft-1:suggestion-1',
+      draft_id: 'draft-1', base_version: 2, status: 'pending'
+    }
+    const { api, calls } = setup(() => ({ code: 202, message: 'accepted', data: operation }))
+    const body = { operation_id: 'suggestion-1', base_version: 2, text: '3.5 吨，0 小时，没有登记证' }
+
+    await expect(api.suggestConversationDraft('draft-1', body)).resolves.toEqual(operation)
+    expect(calls).toEqual([{
+      path: '/api/valuation/conversation/drafts/draft-1/suggestions',
+      init: { method: 'POST', body }
+    }])
+  })
+
+  it('DELETE 204 无响应体也是成功，不套用 JSON 信封解包', async () => {
+    const { api } = setup(() => undefined)
+    await expect(api.deleteConversationDraft('draft-1')).resolves.toBeUndefined()
+  })
+
+  it('草稿按 FL wire 契约反序列化，PATCH 与 undo 发送 base_version 和 state/range/candidates', async () => {
+    const upstream = {
+      id: 'draft-1',
+      version: 2,
+      status: 'editing',
+      updated_at: '2026-11-20T10:00:00Z',
+      expires_at: '2026-11-20T10:30:00Z',
+      can_undo: true,
+      can_submit: false,
+      supplemental: {},
+      fields: {
+        usage_hours: { state: 'range', range: { min: 0, max: 100 }, source: 'user' },
+        tonnage: { state: 'candidate', candidates: [{ value: 3 }, { value: 3.5 }] }
+      }
+    }
+    const { api, calls } = setup(() => wrapped(upstream))
+    expect(await api.getConversationDraft('draft-1')).toEqual(upstream)
+    await api.updateConversationDraft('draft-1', {
+      base_version: 2,
+      fields: {
+        usage_hours: { status: 'range', min: 0, max: 100 },
+        tonnage: { status: 'candidate', candidates: [3, 3.5] }
+      }
+    })
+    await api.undoConversationDraft('draft-1', { base_version: 2 })
+    expect(calls[1]?.init?.body).toEqual({
+      base_version: 2,
+      fields: {
+        usage_hours: { state: 'range', range: { min: 0, max: 100 } },
+        tonnage: { state: 'candidate', candidates: [{ value: 3 }, { value: 3.5 }] }
+      }
+    })
+    expect(calls[2]?.init?.body).toEqual({ base_version: 2 })
+  })
+
+  it('解释操作提交卡片快照与草稿版本，并按 operation_id 查询', async () => {
+    const operation = {
+      id: 'explain:formal-1:explanation-1',
+      kind: 'explanation',
+      operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '',
+      draft_version: 3,
+      status: 'succeeded',
+      card_kind: 'formal',
+      card_key: 'formal-1',
+      first_accepted_user_id: null,
+      created_at: '2026-11-28T00:00:00Z',
+      updated_at: '2026-11-28T00:00:01Z',
+      explanation: {
+        schema_version: 1,
+        action: 'explain',
+        template_key: 'result_snapshot',
+        template: '该卡采用 4,800 小时快照。',
+        facts: [{ id: 'result.estimated_value', label: '预估残值', value: 33600 }],
+        evidence_ids: ['result.estimated_value'],
+        formula_version: 'valuation-v2',
+        snapshot_id: '88',
+        requires_user_action: false,
+        card_version: 1
+      }
+    }
+    const { api, calls } = setup(() => wrapped(operation))
+    const request = {
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal' as const, operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么是这个残值？'
+    }
+
+    await expect(api.createConversationExplanation(request)).resolves.toEqual(operation)
+    await expect(api.getConversationExplanation('explain:formal-1:explanation-1')).resolves.toEqual(operation)
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/explanations',
+        init: { method: 'POST', body: request, timeout: EXPLANATION_REQUEST_TIMEOUT_MS }
+      },
+      {
+        path: '/api/valuation/conversation/operations/explain%3Aformal-1%3Aexplanation-1',
+        init: { method: 'GET', timeout: EXPLANATION_REQUEST_TIMEOUT_MS }
+      }
+    ])
+  })
+
+  it.each([
+    ['顶层 answer/remaining_quota 旧应答', {
+      id: 'explanation-1', operation_id: 'explanation-1', status: 'succeeded',
+      answer: '旧答复', remaining_quota: 6
+    }],
+    ['嵌套 result/action 旧应答', {
+      id: 'explanation-1', operation_id: 'explanation-1', status: 'succeeded',
+      result: { answer: '嵌套答复', action: { type: 'recalculate' }, evidence_ids: ['ev-1'] },
+      quota_remaining: 3
+    }],
+    ['真实 DTO 但证据为空', {
+      id: 'explain:formal-1:explanation-1', kind: 'explanation', operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '', draft_version: 3, status: 'succeeded', card_kind: 'formal', card_key: 'formal-1',
+      first_accepted_user_id: null, created_at: '2026-11-28T00:00:00Z', updated_at: '2026-11-28T00:00:01Z',
+      explanation: {
+        schema_version: 1, action: 'explain', template_key: 'result_snapshot', template: '答复',
+        facts: [], evidence_ids: [], formula_version: 'valuation-v2', requires_user_action: false, card_version: 1
+      }
+    }]
+  ])('%s 在数据层按格式错误拒绝', async (_label, payload) => {
+    const { api } = setup(() => wrapped(payload))
+    await expect(api.createConversationExplanation({
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal', operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么？'
+    })).rejects.toMatchObject({ name: 'ValuationApiError', code: 422 })
+  })
+
+  it('解释受理的 202 Accepted 信封按成功解包', async () => {
+    const operation = {
+      id: 'explain:formal-1:explanation-1',
+      kind: 'explanation',
+      operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '',
+      draft_version: 3,
+      status: 'pending',
+      card_kind: 'formal',
+      card_key: 'formal-1',
+      first_accepted_user_id: null,
+      created_at: '2026-11-28T00:00:00Z',
+      updated_at: '2026-11-28T00:00:01Z'
+    }
+    const { api } = setup(() => ({ code: 202, message: 'accepted', data: operation }))
+    await expect(api.createConversationExplanation({
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal', operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么？'
+    })).resolves.toMatchObject({ status: 'pending', card_key: 'formal-1' })
+  })
+
+  it('操作提交和查询保留同一 operation_id，并解包正式结果', async () => {
+    const operation = {
+      id: 'operation-1',
+      status: 'succeeded',
+      evaluation: { id: 88, usage_hours: 0 }
+    }
+    const { api, calls } = setup(() => wrapped(operation))
+    const request = {
+      operation_id: 'operation-1',
+      draft_id: 'draft-1',
+      draft_version: 2,
+      request: { brand: '合力', usage_hours: 0 } as EvaluationRequest
+    }
+    const created = await api.createConversationOperation(request)
+    const polled = await api.getConversationOperation('operation-1')
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/operations',
+        init: { method: 'POST', body: request }
+      },
+      {
+        path: '/api/valuation/conversation/operations/operation-1',
+        init: { method: 'GET' }
+      }
+    ])
+    expect(created.evaluation?.id).toBe(88)
+    expect(polled).toEqual(operation)
+  })
+})
+
+describe('参考试算端点', () => {
+  const policyRequest = {
+    request_id: 'trial-policy-1',
+    brand: '合力',
+    vehicle_type: '电动平衡重',
+    tonnage: 3,
+    factory_year: 2019,
+    policy: 'demo' as const
+  }
+
+  it('estimateTrial 提交完整草稿与 request_id，并解包 FL 的试算结果', async () => {
+    const request = {
+      request_id: 'trial-request-1',
+      snapshot_id: 'snapshot-hash',
+      policy: 'demo' as const,
+      brand: '合力',
+      vehicle_type: '电动平衡重',
+      series: 'H 系列',
+      tonnage: 3,
+      config_type: '标准',
+      mast_type: '三级门架',
+      mast_height_mm: 4500,
+      factory_year: 2019,
+      sale_year: 2026,
+      usage_hours: 1200,
+      original_paint: true,
+      province: '广东省',
+      city: '广州市',
+      has_license_plate: true,
+      has_registration_certificate: true,
+      has_maintenance_records: true,
+      condition_rating: 'B'
+    }
+    const result = {
+      status: 'priced',
+      input: { usage_hours: 1200 },
+      assumptions: ['按目录候选配置计算'],
+      candidates: [
+        {
+          id: 1,
+          brand: '合力',
+          vehicle_type: '电动平衡重',
+          series: 'H 系列',
+          tonnage: 3,
+          config_type: '标准',
+          mast_type: '三级门架',
+          mast_height_mm: 4500,
+          earliest_factory_year: 2010,
+          original_price: 90000,
+          updated_at: '2026-11-28T00:00:00Z'
+        }
+      ],
+      missing_fields: [],
+      interval: { min: 30000, max: 45000, mid: 37500, width: 15000, width_ratio: 0.4 },
+      width_ratio: 0.4,
+      snapshot: {
+        hash: 'snapshot-hash',
+        sha7: 'abc1234',
+        formula_version: 'valuation-v2',
+        formula_hash: 'formula-hash',
+        policy: 'demo',
+        policy_version: 'trial-v1'
+      }
+    }
+    const { api, calls } = setup(() => wrapped(result))
+
+    await expect(api.estimateTrial(request)).resolves.toEqual(result)
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/trials',
+        init: { method: 'POST', body: request }
+      }
+    ])
+  })
+
+  it('FL 的 403 关闭策略归一为 disabled，并保留上游说明', async () => {
+    const { api } = setup(() => {
+      throw { status: 403, data: { message: '当前组合的参考试算策略未启用' } }
+    })
+
+    await expect(api.estimateTrial(policyRequest)).resolves.toEqual({
+      status: 'disabled',
+      reason_code: 'policy_disabled',
+      message: '当前组合的参考试算策略未启用'
+    })
+  })
+
+  it('FL 的 needs_info 策略原因也归一为 disabled，普通补件仍保持 needs_info', async () => {
+    const { api } = setup(() =>
+      wrapped({
+        status: 'needs_info',
+        reason_code: 'policy_not_configured',
+        message: '当前组合未配置参考试算策略',
+        missing_fields: []
+      })
+    )
+
+    await expect(api.estimateTrial(policyRequest)).resolves.toMatchObject({
+      status: 'disabled',
+      reason_code: 'policy_not_configured'
+    })
+
+    const needsInfo = createValuationApi(async () =>
+      wrapped({ status: 'needs_info', reason_code: 'too_wide', message: '区间仍过宽', missing_fields: ['mast_type'] })
+    )
+    await expect(needsInfo.estimateTrial(policyRequest)).resolves.toMatchObject({
+      status: 'needs_info',
+      reason_code: 'too_wide'
+    })
+  })
+
+  it('非策略错误继续抛出，不伪装成 disabled', async () => {
+    const failure = { status: 500, message: 'upstream unavailable' }
+    const { api } = setup(() => {
+      throw failure
+    })
+
+    await expect(api.estimateTrial(policyRequest)).rejects.toBe(failure)
+  })
+})
+
 describe('电池 RUL 端点', () => {
   const cycles = Array.from({ length: 10 }, (_, i) => ({
     cycle_index: i + 1,
@@ -233,8 +577,16 @@ describe('错误与下载地址', () => {
     error.statusCode = 401
     expect(valuationErrorStatus(error)).toBe(401)
     expect(valuationErrorStatus({ response: { status: 403 } })).toBe(403)
+    expect(valuationErrorStatus({ code: 422 })).toBe(422)
     expect(valuationErrorStatus(null)).toBeNull()
     expect(valuationErrorStatus({ status: 'oops' })).toBeNull()
+  })
+
+  it('ValuationApiError 的上置信封 code 可作为 HTTP 状态识别', () => {
+    expect(valuationErrorStatus(new ValuationApiError('描述未通过校验', 400))).toBe(400)
+    expect(valuationErrorStatus(new ValuationApiError('建议额度已耗尽', 429))).toBe(429)
+    expect(valuationErrorStatus(new ValuationApiError('建议等待超时', 408))).toBe(408)
+    expect(valuationErrorStatus(new ValuationApiError('上游超时', 504))).toBe(504)
   })
 
   it('可展示文案优先取服务端 message，跳过 ofetch 原始串与本地异常', () => {
