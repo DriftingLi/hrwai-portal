@@ -12,6 +12,8 @@
         :brands="brands"
         :provinces="provinces"
         :condition-ratings="conditionRatings"
+        :trial-enabled="runtimeConfig.public.valuationTrialEnabled === true"
+        :trial-policy="runtimeConfig.public.valuationTrialPolicy === 'pilot' ? 'pilot' : 'demo'"
       />
     </div>
   </ValuationShell>
@@ -23,6 +25,7 @@ import type { Brand, ConditionRating } from '~/api/valuation'
 import { useValuationApi } from '~/composables/useValuationApi'
 
 const api = useValuationApi()
+const runtimeConfig = useRuntimeConfig()
 const { data: dictionaries, error: dictionaryError } = await useAsyncData(
   'valuation-conversation-dictionaries',
   async () => {

@@ -73,7 +73,10 @@ export const draftStatusLabels: Record<DraftFieldStatus, string> = {
 export function formatConversationField(key: DraftFieldKey, current: DraftField): string {
   if (current.status === 'missing') return '未提供'
   if (current.status === 'unknown') return '明确未知'
-  if (current.status === 'range') return `${current.min ?? '?'}–${current.max ?? '?'} 小时（范围）`
+  if (current.status === 'range') {
+    const unit = key === 'factory_year' ? ' 年' : ' 小时'
+    return `${current.min ?? '?'}–${current.max ?? '?'}${unit}（范围）`
+  }
   if (current.status === 'candidate') return current.candidates?.length ? `待确认：${current.candidates.join(' / ')}` : '待确认候选'
   if (typeof current.value === 'boolean') return current.value ? '是' : '否'
   if (key === 'tonnage') return `${current.value} 吨`

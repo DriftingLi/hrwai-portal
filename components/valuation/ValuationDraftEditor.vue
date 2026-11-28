@@ -69,12 +69,12 @@
             <button type="button" class="unknown-button" :data-test="`${definition.key}-unknown`" :disabled="busy" @click="emit('mark-unknown', definition.key)">明确不知道</button>
           </template>
 
-          <div v-if="definition.key === 'usage_hours'" class="range-editor">
-            <button type="button" class="text-button" @click="rangeOpen = !rangeOpen">{{ rangeOpen ? '收起范围填写' : '只知道工时范围' }}</button>
+          <div v-if="definition.key === 'usage_hours' || definition.key === 'factory_year'" class="range-editor">
+            <button type="button" class="text-button" :data-test="`${definition.key}-range-toggle`" @click="rangeOpen = !rangeOpen">{{ rangeOpen ? '收起范围填写' : rangeToggleLabel(definition.key) }}</button>
             <div v-if="rangeOpen" class="range-inputs">
-              <label>最小工时<input v-model.number="rangeMin" type="number" min="0" data-test="usage-min" /></label>
-              <label>最大工时<input v-model.number="rangeMax" type="number" min="0" data-test="usage-max" /></label>
-              <button type="button" class="secondary-button" data-test="save-range" :disabled="busy" @click="saveRange">保存范围</button>
+              <label>{{ definition.key === 'factory_year' ? '最早年份' : '最小工时' }}<input v-model.number="rangeMin" type="number" :min="definition.key === 'factory_year' ? 1900 : 0" :data-test="definition.key === 'usage_hours' ? 'usage-min' : `${definition.key}-min`" /></label>
+              <label>{{ definition.key === 'factory_year' ? '最晚年份' : '最大工时' }}<input v-model.number="rangeMax" type="number" :min="definition.key === 'factory_year' ? 1900 : 0" :data-test="definition.key === 'usage_hours' ? 'usage-max' : `${definition.key}-max`" /></label>
+              <button type="button" class="secondary-button" :data-test="definition.key === 'usage_hours' ? 'save-range' : `${definition.key}-save-range`" :disabled="busy" @click="saveRange(definition.key)">保存范围</button>
             </div>
           </div>
           <p class="field-value">{{ formatConversationField(definition.key, field(definition.key)) }}</p>
@@ -133,7 +133,7 @@ const emit = defineEmits<{
   'save-direct': [key: DraftFieldKey, event: Event]
   'choose-dictionary': [key: DraftFieldKey, event: Event]
   'mark-unknown': [key: DraftFieldKey]
-  'save-range': [min: number, max: number]
+  'save-range': [key: DraftFieldKey, min: number, max: number]
   'range-error': []
   review: []
 }>()
@@ -152,12 +152,15 @@ function dictionaryValue(key: DraftFieldKey): string | number {
   const value = field(key).value
   return typeof value === 'boolean' ? '' : value ?? ''
 }
-function saveRange() {
+function rangeToggleLabel(key: DraftFieldKey): string {
+  return key === 'factory_year' ? '只知道出厂年份范围' : '只知道工时范围'
+}
+function saveRange(key: DraftFieldKey) {
   if (rangeMin.value === undefined || rangeMax.value === undefined || rangeMin.value > rangeMax.value) {
     emit('range-error')
     return
   }
-  emit('save-range', rangeMin.value, rangeMax.value)
+  emit('save-range', key, rangeMin.value, rangeMax.value)
   rangeOpen.value = false
 }
 </script>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DRAFT_IDLE_TIMEOUT_MS,
   createDraftFields,
+  draftFieldsToTrial,
   draftToEvaluationRequest,
   isDraftComplete,
   normalizeConversationDraft,
@@ -96,6 +97,27 @@ describe('估值对话草稿状态机', () => {
     })
   })
 
+  it('试算投影保留明确零值/false，只把出厂年份范围映射成 FL 参数', () => {
+    const fields = createDraftFields({
+      brand: '合力', vehicle_type: '电动平衡重式', tonnage: 3,
+      usage_hours: 0, original_paint: false
+    })
+    fields.factory_year = { status: 'range', min: 2018, max: 2020 }
+    fields.series = { status: 'candidate', candidates: ['H 系列'] }
+    fields.mast_type = { status: 'unknown' }
+
+    expect(draftFieldsToTrial(fields)).toEqual({
+      brand: '合力',
+      vehicle_type: '电动平衡重式',
+      tonnage: 3,
+      factory_year_min: 2018,
+      factory_year_max: 2020,
+      sale_year: currentYear,
+      usage_hours: 0,
+      original_paint: false
+    })
+  })
+
   it('未知、范围或候选字段不能形成正式请求', () => {
     for (const status of ['unknown', 'range', 'candidate', 'missing'] as const) {
       const draft = completeDraft()
@@ -124,6 +146,19 @@ describe('估值对话草稿状态机', () => {
     expect(fields.config_type).toMatchObject({ status: 'value', value: '标准' })
     expect(fields.mast_type).toMatchObject({ status: 'value', value: '两级门架' })
     expect(fields.mast_height_mm).toMatchObject({ status: 'value', value: 0 })
+  })
+
+  it('未填写或明确未知的下游字段保持原状，不因字典到达自动获得年份', () => {
+    const fields = createDraftFields()
+    fields.brand = { status: 'value', value: '合力' }
+    fields.factory_year = { status: 'unknown', evidence: '用户表示不知道' }
+
+    const reconciled = reconcileDraftFields(fields, { brand: fields.brand }, {
+      factory_year: [2020, 2021],
+      series: ['H 系列']
+    })
+    expect(reconciled.factory_year).toEqual(fields.factory_year)
+    expect(reconciled.series).toEqual({ status: 'missing' })
   })
 
   it('下游值不在新候选中时标为待确认，不伪造成明确值', () => {

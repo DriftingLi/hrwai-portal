@@ -2,6 +2,28 @@
   <div class="conversation-layout">
     <ValuationTimeline :entries="timeline.entries.value" :load-error="loadError" :expired-notice="expiredNotice" />
 
+    <section v-if="trialEnabled" class="trial-results" aria-labelledby="trial-results-title" data-test="trial-results">
+      <header class="trial-results-head">
+        <div>
+          <p class="eyebrow">参考区间 · 非正式记录</p>
+          <h2 id="trial-results-title">参考试算</h2>
+          <p class="draft-summary">首次补齐品牌、车型、吨位和有效年份后自动试算；修改草稿不会覆盖旧卡。FL 策略为最终权威，正式评估需另行核对确认。</p>
+        </div>
+        <button type="button" class="secondary-button" data-test="recalculate-trial" :disabled="!trialReady || trial.loading.value" :aria-busy="trial.loading.value" @click="trial.recalculate">
+          {{ trial.loading.value ? '试算中…' : '按当前草稿重算' }}
+        </button>
+      </header>
+      <p v-if="!trialReady" class="demo-note">补齐品牌、车型、吨位和有效出厂年份（或年份范围）后可试算。</p>
+      <p v-if="trial.error.value" class="notice error-notice" role="alert">{{ trial.error.value }}</p>
+      <TrialResultCard
+        v-for="card in trial.cards.value"
+        :key="card.requestId"
+        :result="card.result"
+        :stale="card.stale"
+        :request-id="card.requestId"
+      />
+    </section>
+
     <section class="draft-card" aria-labelledby="draft-title">
       <header class="draft-head">
         <div>
@@ -35,7 +57,7 @@
         @choose-dictionary="chooseDictionary"
         @mark-unknown="markUnknown"
         @save-range="saveRange"
-        @range-error="actionError = '请填写有效的最小和最大工时'"
+        @range-error="actionError = '请填写有效的最小和最大值'"
         @review="review.openReview"
       >
         <ValuationConfirmationPanel
@@ -63,21 +85,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { Brand, ConditionRating } from '~/api/valuation'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Brand, ConditionRating, TrialPolicy } from '~/api/valuation'
 import { useValuationApi } from '~/composables/useValuationApi'
+import { isTrialDraftReady, useTrialEstimate } from '~/composables/useTrialEstimate'
 import { useValuationConversation } from '~/composables/useValuationConversation'
 import { useConversationDictionaries } from '~/composables/useConversationDictionaries'
 import { useConversationReview } from '~/composables/useConversationReview'
 import { useConversationTimeline } from '~/composables/useConversationTimeline'
 import {
   createDraftFields,
+  draftFieldsToTrial,
   draftToEvaluationRequest,
   type DraftFieldKey
 } from '~/utils/valuationConversation'
 import { conversationDraftSummary, valuationConversationDemo as demoValues } from '~/utils/valuationConversationFields'
 
-const props = defineProps<{ brands: Brand[]; provinces: string[]; conditionRatings: ConditionRating[] }>()
+const props = withDefaults(defineProps<{
+  brands: Brand[]
+  provinces: string[]
+  conditionRatings: ConditionRating[]
+  trialEnabled?: boolean
+  trialPolicy?: TrialPolicy
+}>(), {
+  trialEnabled: false,
+  trialPolicy: 'demo'
+})
 const controller = useValuationConversation()
 const { draft, loading, saving, confirming, complete } = controller
 const fields = computed(() => draft.value?.fields ?? createDraftFields())
@@ -85,6 +118,12 @@ const dictionaries = useConversationDictionaries(useValuationApi(), props, field
 const summary = computed(() => conversationDraftSummary(fields.value))
 const timeline = useConversationTimeline(() => controller.touch())
 const review = useConversationReview(draft, complete, () => controller.touch())
+const trial = useTrialEstimate({ enabled: props.trialEnabled, policy: props.trialPolicy })
+const trialDraft = computed(() => draftFieldsToTrial(fields.value))
+const trialReady = computed(() => isTrialDraftReady(trialDraft.value))
+watch(fields, (value) => {
+  void trial.updateDraft(draftFieldsToTrial(value))
+}, { deep: true, immediate: true })
 const draftExpanded = ref(false)
 const loadError = ref('')
 const actionError = ref('')
@@ -121,8 +160,8 @@ async function chooseDictionary(key: DraftFieldKey, event: Event) {
 async function markUnknown(key: DraftFieldKey) {
   await guarded(() => controller.setUnknown(key, '用户明确表示不知道'))
 }
-async function saveRange(min: number, max: number) {
-  await guarded(() => controller.setRange('usage_hours', min, max, '用户提供工时范围'))
+async function saveRange(key: DraftFieldKey, min: number, max: number) {
+  await guarded(() => controller.setRange(key, min, max, key === 'factory_year' ? '用户提供出厂年份范围' : '用户提供工时范围'))
 }
 async function loadDemo() {
   await guarded(async () => {
@@ -183,4 +222,40 @@ onBeforeUnmount(() => {
 })
 </script>
 
+<style scoped>
+.trial-results {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.trial-results-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-sm);
+}
+.trial-results-head h2 {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+.trial-results-head .secondary-button {
+  flex-shrink: 0;
+}
+@media (max-width: 560px) {
+  .trial-results-head {
+    padding: var(--space-4);
+  }
+  .trial-results-head .secondary-button {
+    width: 100%;
+  }
+}
+</style>
 <style src="~/assets/css/valuation-conversation.css"></style>

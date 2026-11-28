@@ -238,6 +238,105 @@ export interface EvaluationRequest {
   condition_rating: string
 }
 
+export type TrialPolicy = 'demo' | 'pilot'
+
+/** 试算接收部分草稿；未知、范围和候选由 FL 解释，门户不补业务默认值。 */
+export type TrialDraft = Partial<EvaluationRequest> & {
+  factory_year_min?: number
+  factory_year_max?: number
+  policy?: TrialPolicy
+  [key: string]: unknown
+}
+
+export interface TrialRequest extends TrialDraft {
+  request_id: string
+  snapshot_id?: string
+  policy: TrialPolicy
+}
+
+export interface TrialCandidate {
+  id: number
+  brand: string
+  vehicle_type: string
+  series: string
+  tonnage: number
+  config_type: string
+  mast_type: string
+  mast_height_mm: number
+  earliest_factory_year: number
+  original_price: number
+  updated_at: string
+}
+
+export interface TrialInterval {
+  min: number
+  max: number
+  mid: number
+  width: number
+  width_ratio: number
+}
+
+export interface TrialSnapshotMeta {
+  hash: string
+  sha7: string
+  formula_version: string
+  formula_hash: string
+  policy: string
+  policy_version: string
+}
+
+interface TrialResultBase {
+  request_id?: string
+  snapshot_id?: string
+  reason_code?: string
+  message?: string
+  input?: TrialDraft
+  assumptions?: string[]
+  candidates?: TrialCandidate[]
+  missing_fields?: string[]
+  snapshot?: TrialSnapshotMeta
+}
+
+export interface PricedTrialResult extends TrialResultBase {
+  status: 'priced'
+  input: TrialDraft
+  assumptions: string[]
+  candidates: TrialCandidate[]
+  missing_fields: string[]
+  interval: TrialInterval
+  width_ratio: number
+  snapshot: TrialSnapshotMeta
+}
+
+export interface NeedsInfoTrialResult extends TrialResultBase {
+  status: 'needs_info'
+  missing_fields: string[]
+}
+
+/** 门户展示态：由 FL 的 403 或 needs_info 策略原因归一，门户不自行放行。 */
+export interface DisabledTrialResult extends TrialResultBase {
+  status: 'disabled'
+}
+
+export type TrialResult = PricedTrialResult | NeedsInfoTrialResult | DisabledTrialResult
+
+const TRIAL_POLICY_REASONS = new Set([
+  'policy_disabled',
+  'policy_not_configured',
+  'policy_forbidden'
+])
+
+function normalizeTrialResult(result: TrialResult): TrialResult {
+  if (result.status === 'needs_info' && result.reason_code && TRIAL_POLICY_REASONS.has(result.reason_code)) {
+    return {
+      status: 'disabled',
+      reason_code: result.reason_code,
+      message: result.message
+    }
+  }
+  return result
+}
+
 export interface DimensionScore {
   label: string
   value: number
@@ -519,7 +618,21 @@ export function createValuationApi(fetcher: ValuationFetcher) {
       get<ConversationOperation>(
         `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
       ),
-
+    async estimateTrial(request: TrialRequest): Promise<TrialResult> {
+      try {
+        return normalizeTrialResult(await post<TrialResult>(`${VALUATION_API_PREFIX}/trials`, request))
+      } catch (cause) {
+        // FL 的试算 403 专指策略关闭/禁止；投影成关闭卡，其余失败仍交给控制器展示错误。
+        if (valuationErrorStatus(cause) === 403) {
+          return {
+            status: 'disabled',
+            reason_code: 'policy_disabled',
+            message: valuationErrorMessage(cause, '参考试算暂未开放')
+          }
+        }
+        throw cause
+      }
+    },
     createEvaluation: (request: EvaluationRequest) =>
       post<EvaluationRecord>(`${VALUATION_API_PREFIX}/evaluations`, request),
     listEvaluations: (query: EvaluationListQuery = {}) =>

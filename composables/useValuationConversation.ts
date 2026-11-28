@@ -232,9 +232,9 @@ export function createValuationConversationController(api: ConversationApi, opti
       const field = draft.value!.fields[fieldKey]
       if (field.status !== 'candidate') continue
       const preferred = field.candidates?.[0]
-      patch[fieldKey] = preferred !== undefined && options.includes(preferred)
-        ? valueField(fieldKey, preferred, '原值与新上游字典兼容，已重新核对', 'dictionary')
-        : { status: 'candidate', candidates: options, evidence: field.evidence }
+      if (preferred !== undefined && options.includes(preferred)) {
+        patch[fieldKey] = valueField(fieldKey, preferred, '原值与新上游字典兼容，已重新核对', 'dictionary')
+      }
     }
     if (Object.keys(patch).length) await patchFields(patch, '上游字典变更后重新核对')
   }

@@ -4,7 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ValuationConversation from '~/components/valuation/ValuationConversation.vue'
 import { createDraftFields, type DraftFields } from '~/utils/valuationConversation'
-import type { EvaluationRequest } from '~/api/valuation'
+import type { EvaluationRequest, TrialPolicy, TrialRequest, TrialResult } from '~/api/valuation'
 
 let serverFields: DraftFields = createDraftFields()
 let serverVersion = 0
@@ -24,7 +24,42 @@ function upstreamDraft(version: number, fields: DraftFields) {
   }
 }
 
+function trialResult(request: TrialRequest): TrialResult {
+  return {
+    status: 'priced',
+    request_id: request.request_id,
+    snapshot_id: 'frozen-snapshot',
+    input: request,
+    assumptions: ['按冻结目录候选计算'],
+    candidates: [{
+      id: 1,
+      brand: String(request.brand),
+      vehicle_type: String(request.vehicle_type),
+      series: 'H 系列',
+      tonnage: Number(request.tonnage),
+      config_type: '标准',
+      mast_type: '两级门架',
+      mast_height_mm: 3000,
+      earliest_factory_year: 2010,
+      original_price: 90000,
+      updated_at: '2026-11-28T00:00:00Z'
+    }],
+    missing_fields: [],
+    interval: { min: 30000, max: 45000, mid: 37500, width: 15000, width_ratio: 0.4 },
+    width_ratio: 0.4,
+    snapshot: {
+      hash: 'frozen-snapshot',
+      sha7: 'frozen1',
+      formula_version: 'valuation-v2',
+      formula_hash: 'formula-hash',
+      policy: request.policy,
+      policy_version: 'trial-v1'
+    }
+  }
+}
+
 const apiMock = {
+  estimateTrial: vi.fn(async (request: TrialRequest) => trialResult(request)),
   createConversationDraft: vi.fn(async () => {
     serverVersion = 1
     return upstreamDraft(serverVersion, serverFields)
@@ -90,8 +125,11 @@ const props = {
   conditionRatings: [{ id: 1, rating: 'B', label: '良好', base_coefficient: 0.9 }]
 }
 
-async function mountPage(expectedVersion = 1) {
-  const wrapper = await mountSuspended(ValuationConversation, { props, route: '/valuation/conversation' })
+async function mountPage(expectedVersion = 1, trialEnabled = false, trialPolicy: TrialPolicy = 'demo') {
+  const wrapper = await mountSuspended(ValuationConversation, {
+    props: { ...props, trialEnabled, trialPolicy },
+    route: '/valuation/conversation'
+  })
   await flushPromises()
   await vi.waitFor(() => expect(wrapper.get('[data-test="draft-version"]').text()).toContain(String(expectedVersion)))
   return wrapper
@@ -105,6 +143,25 @@ async function loadDemo(wrapper: Awaited<ReturnType<typeof mountPage>>) {
   await wrapper.get('[data-test="load-demo"]').trigger('click')
   await flushPromises()
   await vi.waitFor(() => expect(wrapper.get('[data-test="review"]').attributes('disabled')).toBeUndefined())
+}
+
+async function openDraft(wrapper: Awaited<ReturnType<typeof mountPage>>) {
+  if (wrapper.get('[data-test="toggle-draft"]').attributes('aria-expanded') === 'false') {
+    await wrapper.get('[data-test="toggle-draft"]').trigger('click')
+    await flushPromises()
+  }
+}
+
+async function fillTrialMinimum(wrapper: Awaited<ReturnType<typeof mountPage>>, withYear = true) {
+  await openDraft(wrapper)
+  for (const [key, value] of [['brand', '林德'], ['vehicle_type', '电动平衡重式'], ['tonnage', '2']] as const) {
+    await wrapper.get(`[data-test="${key}"]`).setValue(value)
+    await flushPromises()
+  }
+  if (withYear) {
+    await wrapper.get('[data-test="factory_year"]').setValue('2020')
+    await flushPromises()
+  }
 }
 
 async function confirm(wrapper: Awaited<ReturnType<typeof mountPage>>) {
@@ -124,6 +181,8 @@ describe('对话内联评估组件', () => {
     serverFields = createDraftFields()
     serverVersion = 0
     serverHistory = []
+    apiMock.estimateTrial.mockReset()
+    apiMock.estimateTrial.mockImplementation(async (request: TrialRequest) => trialResult(request))
     vi.clearAllMocks()
   })
 
@@ -254,6 +313,106 @@ describe('对话内联评估组件', () => {
     await flushPromises()
     expect((wrapper.get('[data-test="acknowledge"]').element as HTMLInputElement).checked).toBe(false)
     expect(wrapper.get('[data-test="confirm"]').attributes('disabled')).toBeDefined()
+    expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
+  })
+
+  it('试算默认关闭：完整草稿也不显示入口、不请求 FL', async () => {
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+
+    expect(wrapper.find('[data-test="trial-results"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="recalculate-trial"]').exists()).toBe(false)
+    expect(apiMock.estimateTrial).not.toHaveBeenCalled()
+  })
+
+  it('开启后首次达到最低输入即自动出卡，不生成正式记录或报告入口', async () => {
+    const wrapper = await mountPage(1, true)
+    await fillTrialMinimum(wrapper)
+    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+
+    expect(apiMock.estimateTrial).toHaveBeenCalledWith(expect.objectContaining({
+      brand: '林德',
+      vehicle_type: '电动平衡重式',
+      tonnage: 2,
+      factory_year: 2020,
+      policy: 'demo',
+      request_id: expect.any(String)
+    }))
+    expect(apiMock.estimateTrial.mock.calls[0]![0]).not.toHaveProperty('snapshot_id')
+    expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe('priced')
+    expect(wrapper.get('[data-test="trial-card"]').text()).toContain('¥3.00 ~ ¥4.50 万')
+    expect(wrapper.findAll('[data-test="trial-card"] a, [data-test="trial-card"] button')).toHaveLength(0)
+    expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
+  })
+
+  it('非法年份不消耗自动机会，修正后自动试算', async () => {
+    const wrapper = await mountPage(1, true)
+    await fillTrialMinimum(wrapper, false)
+    await wrapper.get('[data-test="factory_year"]').setValue('1899')
+    await flushPromises()
+    expect(apiMock.estimateTrial).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-test="factory_year"]').setValue('2020')
+    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+    expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe('priced')
+  })
+
+  it('倒置年份范围不消耗机会；修正后自动出卡，改草稿标旧卡 stale 并沿快照追加新卡', async () => {
+    const wrapper = await mountPage(1, true, 'pilot')
+    await fillTrialMinimum(wrapper, false)
+    await wrapper.get('[data-test="factory_year-range-toggle"]').trigger('click')
+    await wrapper.get('[data-test="factory_year-min"]').setValue('2020')
+    await wrapper.get('[data-test="factory_year-max"]').setValue('2010')
+    await wrapper.get('[data-test="factory_year-save-range"]').trigger('click')
+    await flushPromises()
+    expect(apiMock.estimateTrial).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('请填写有效的最小和最大值')
+
+    await wrapper.get('[data-test="factory_year-min"]').setValue('2018')
+    await wrapper.get('[data-test="factory_year-max"]').setValue('2020')
+    await wrapper.get('[data-test="factory_year-save-range"]').trigger('click')
+    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+    expect(apiMock.estimateTrial.mock.calls[0]![0]).toMatchObject({
+      factory_year_min: 2018,
+      factory_year_max: 2020,
+      policy: 'pilot'
+    })
+    const firstRequestId = wrapper.get('[data-test="trial-card"]').attributes('data-request-id')
+    expect(wrapper.get('[data-test="trial-card"]').text()).toContain('2018–2020 年')
+
+    await wrapper.get('[data-test="usage_hours"]').setValue('6200')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.get('[data-test="trial-card"]').attributes('data-stale')).toBe('true'))
+    expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1)
+
+    await wrapper.get('[data-test="recalculate-trial"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(2))
+    expect(apiMock.estimateTrial.mock.calls[1]![0]).toMatchObject({
+      usage_hours: 6200,
+      policy: 'pilot',
+      snapshot_id: 'frozen-snapshot',
+      request_id: expect.any(String)
+    })
+    const cards = wrapper.findAll('[data-test="trial-card"]')
+    expect(cards[0]!.attributes('data-request-id')).toBe(firstRequestId)
+    expect(cards[0]!.attributes('data-stale')).toBe('true')
+    expect(cards[0]!.text()).toContain('2018–2020 年')
+    expect(cards[1]!.attributes('data-stale')).toBe('false')
+    expect(cards[1]!.attributes('data-request-id')).not.toBe(firstRequestId)
+  })
+
+  it.each([
+    ['needs_info', { status: 'needs_info' as const, message: '目录区间仍过宽', missing_fields: ['mast_type'] }],
+    ['disabled', { status: 'disabled' as const, message: '当前组合尚未开放参考试算' }]
+  ])('页面真实呈现 FL 的 %s 三态结果', async (status, result) => {
+    apiMock.estimateTrial.mockResolvedValueOnce(result)
+    const wrapper = await mountPage(1, true)
+    await loadDemo(wrapper)
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(1))
+
+    expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe(status)
+    expect(wrapper.get('[data-test="trial-card"]').text()).toContain(result.message)
+    expect(wrapper.findAll('[data-test="trial-card"] a, [data-test="trial-card"] button')).toHaveLength(0)
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
   })
 

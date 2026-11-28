@@ -1,4 +1,4 @@
-import type { EvaluationRecord, EvaluationRequest, UpstreamConversationDraft } from '~/api/valuation'
+import type { EvaluationRecord, EvaluationRequest, TrialDraft, UpstreamConversationDraft } from '~/api/valuation'
 import { dependentValuationFields } from '~/utils/valuationDependencies'
 import { validateEvaluationForm, type ValidatableForm } from '~/utils/valuationValidator'
 
@@ -177,6 +177,21 @@ export function draftValues(fields: DraftFields): DraftFormValues {
   ) as unknown as DraftFormValues
 }
 
+/** 只投影已明确的值与 FL 支持的出厂年份范围；未知/候选不补默认值。 */
+export function draftFieldsToTrial(fields: DraftFields): TrialDraft {
+  const draft: Record<string, string | number | boolean> = {}
+  for (const key of WHOLE_MACHINE_FIELD_KEYS) {
+    const field = fields[key]
+    if (key === 'factory_year' && field?.status === 'range') {
+      if (field.min !== undefined) draft.factory_year_min = field.min
+      if (field.max !== undefined) draft.factory_year_max = field.max
+    } else if (field?.status === 'value' && field.value !== undefined) {
+      draft[key] = field.value
+    }
+  }
+  return draft
+}
+
 export function isDraftComplete(draft: ConversationDraft): boolean {
   return WHOLE_MACHINE_FIELD_KEYS.every((key) => draft.fields[key]?.status === 'value')
 }
@@ -229,6 +244,8 @@ export function reconcileDraftFields(
       : comparable
         ? [value]
         : current.candidates
+    // 未填写/未知/范围不是可自动确认的旧值；保持原状态，等用户实际点选或输入。
+    if (!comparable && !current.candidates?.length) continue
     next[key] = {
       status: 'candidate',
       candidates: candidates ? [...candidates] : undefined,

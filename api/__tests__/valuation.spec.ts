@@ -289,6 +289,127 @@ describe('对话草稿端点路径', () => {
   })
 })
 
+describe('参考试算端点', () => {
+  const policyRequest = {
+    request_id: 'trial-policy-1',
+    brand: '合力',
+    vehicle_type: '电动平衡重',
+    tonnage: 3,
+    factory_year: 2019,
+    policy: 'demo' as const
+  }
+
+  it('estimateTrial 提交完整草稿与 request_id，并解包 FL 的试算结果', async () => {
+    const request = {
+      request_id: 'trial-request-1',
+      snapshot_id: 'snapshot-hash',
+      policy: 'demo' as const,
+      brand: '合力',
+      vehicle_type: '电动平衡重',
+      series: 'H 系列',
+      tonnage: 3,
+      config_type: '标准',
+      mast_type: '三级门架',
+      mast_height_mm: 4500,
+      factory_year: 2019,
+      sale_year: 2026,
+      usage_hours: 1200,
+      original_paint: true,
+      province: '广东省',
+      city: '广州市',
+      has_license_plate: true,
+      has_registration_certificate: true,
+      has_maintenance_records: true,
+      condition_rating: 'B'
+    }
+    const result = {
+      status: 'priced',
+      input: { usage_hours: 1200 },
+      assumptions: ['按目录候选配置计算'],
+      candidates: [
+        {
+          id: 1,
+          brand: '合力',
+          vehicle_type: '电动平衡重',
+          series: 'H 系列',
+          tonnage: 3,
+          config_type: '标准',
+          mast_type: '三级门架',
+          mast_height_mm: 4500,
+          earliest_factory_year: 2010,
+          original_price: 90000,
+          updated_at: '2026-11-28T00:00:00Z'
+        }
+      ],
+      missing_fields: [],
+      interval: { min: 30000, max: 45000, mid: 37500, width: 15000, width_ratio: 0.4 },
+      width_ratio: 0.4,
+      snapshot: {
+        hash: 'snapshot-hash',
+        sha7: 'abc1234',
+        formula_version: 'valuation-v2',
+        formula_hash: 'formula-hash',
+        policy: 'demo',
+        policy_version: 'trial-v1'
+      }
+    }
+    const { api, calls } = setup(() => wrapped(result))
+
+    await expect(api.estimateTrial(request)).resolves.toEqual(result)
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/trials',
+        init: { method: 'POST', body: request }
+      }
+    ])
+  })
+
+  it('FL 的 403 关闭策略归一为 disabled，并保留上游说明', async () => {
+    const { api } = setup(() => {
+      throw { status: 403, data: { message: '当前组合的参考试算策略未启用' } }
+    })
+
+    await expect(api.estimateTrial(policyRequest)).resolves.toEqual({
+      status: 'disabled',
+      reason_code: 'policy_disabled',
+      message: '当前组合的参考试算策略未启用'
+    })
+  })
+
+  it('FL 的 needs_info 策略原因也归一为 disabled，普通补件仍保持 needs_info', async () => {
+    const { api } = setup(() =>
+      wrapped({
+        status: 'needs_info',
+        reason_code: 'policy_not_configured',
+        message: '当前组合未配置参考试算策略',
+        missing_fields: []
+      })
+    )
+
+    await expect(api.estimateTrial(policyRequest)).resolves.toMatchObject({
+      status: 'disabled',
+      reason_code: 'policy_not_configured'
+    })
+
+    const needsInfo = createValuationApi(async () =>
+      wrapped({ status: 'needs_info', reason_code: 'too_wide', message: '区间仍过宽', missing_fields: ['mast_type'] })
+    )
+    await expect(needsInfo.estimateTrial(policyRequest)).resolves.toMatchObject({
+      status: 'needs_info',
+      reason_code: 'too_wide'
+    })
+  })
+
+  it('非策略错误继续抛出，不伪装成 disabled', async () => {
+    const failure = { status: 500, message: 'upstream unavailable' }
+    const { api } = setup(() => {
+      throw failure
+    })
+
+    await expect(api.estimateTrial(policyRequest)).rejects.toBe(failure)
+  })
+})
+
 describe('电池 RUL 端点', () => {
   const cycles = Array.from({ length: 10 }, (_, i) => ({
     cycle_index: i + 1,
