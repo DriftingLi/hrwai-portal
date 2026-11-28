@@ -1,5 +1,5 @@
 <template>
-  <section v-if="result.status === 'priced'" class="trial-card" data-test="trial-card" :data-status="result.status" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
+  <section v-if="result.status === 'priced'" class="trial-card" :class="{ 'is-selected': selected }" :data-selected="selected ? 'true' : 'false'" data-test="trial-card" :data-status="result.status" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
     <p v-if="stale" class="trial-stale" role="status">草稿已修改：这张卡保留的是修改前的试算快照，请确认后主动重算。</p>
     <header class="trial-head">
       <div>
@@ -49,6 +49,12 @@
       </ul>
     </div>
 
+    <div v-if="explainable" class="trial-actions">
+      <button type="button" class="secondary-button" data-test="explain-trial" :disabled="!canExplain" @click="emit('explain')">
+        {{ canExplain ? (selected ? '已选中 · 解释这张卡' : '解释这张卡') : '暂无可解释快照' }}
+      </button>
+    </div>
+
     <footer class="trial-versions" aria-label="试算版本">
       <span>公式 {{ result.snapshot.formula_version }}</span>
       <span>快照 {{ result.snapshot.sha7 }}</span>
@@ -56,7 +62,7 @@
     </footer>
   </section>
 
-  <section v-else-if="result.status === 'needs_info'" class="trial-card trial-card-notice" data-test="trial-card" :data-status="result.status" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
+  <section v-else-if="result.status === 'needs_info'" class="trial-card trial-card-notice" :class="{ 'is-selected': selected }" data-test="trial-card" :data-status="result.status" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
     <p v-if="stale" class="trial-stale" role="status">草稿已修改：这张卡保留的是修改前的试算快照，请确认后主动重算。</p>
     <p class="trial-eyebrow">参考试算 · 待补资料</p>
     <h2 class="trial-title">暂不给价</h2>
@@ -67,13 +73,19 @@
         <li v-for="item in result.missing_fields" :key="item">{{ missingFieldLabel(item) }}</li>
       </ul>
     </div>
+    <div v-if="explainable" class="trial-actions">
+      <button type="button" class="secondary-button" data-test="explain-trial" disabled>暂无可解释快照</button>
+    </div>
   </section>
 
-  <section v-else class="trial-card trial-card-notice" data-test="trial-card" data-status="disabled" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
+  <section v-else class="trial-card trial-card-notice" :class="{ 'is-selected': selected }" data-test="trial-card" data-status="disabled" :data-stale="stale ? 'true' : 'false'" :data-request-id="requestId" aria-live="polite">
     <p v-if="stale" class="trial-stale" role="status">草稿已修改：这张卡保留的是修改前的试算快照，请确认后主动重算。</p>
     <p class="trial-eyebrow">参考试算 · 关闭策略</p>
     <h2 class="trial-title">参考试算暂未开放</h2>
     <p class="trial-note">{{ result.message || '参考试算仍在验证，请稍后再试。' }}</p>
+    <div v-if="explainable" class="trial-actions">
+      <button type="button" class="secondary-button" data-test="explain-trial" disabled>暂无可解释快照</button>
+    </div>
   </section>
 </template>
 
@@ -83,9 +95,11 @@ import type { TrialCandidate, TrialResult } from '~/api/valuation'
 import { formatInteger, formatTonnage, formatWan, formatWanCurrency } from '~/utils/valuationFormat'
 
 const props = withDefaults(
-  defineProps<{ result: TrialResult; stale?: boolean; requestId?: string }>(),
-  { stale: false, requestId: '' }
+  defineProps<{ result: TrialResult; stale?: boolean; requestId?: string; explainable?: boolean; selected?: boolean }>(),
+  { stale: false, requestId: '', explainable: false, selected: false }
 )
+const emit = defineEmits<{ explain: [] }>()
+const canExplain = computed(() => props.result.status === 'priced' && Boolean(props.result.snapshot_id))
 
 const FIELD_LABELS: Record<string, string> = {
   brand: '品牌',
@@ -188,6 +202,15 @@ function candidateSummary(candidate: TrialCandidate): string {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
+}
+.trial-card.is-selected {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px var(--color-primary-100), var(--shadow-md);
+}
+.trial-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-5);
 }
 .trial-stale {
   margin: 0 0 var(--space-4);

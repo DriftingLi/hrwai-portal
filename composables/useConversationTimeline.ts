@@ -1,6 +1,7 @@
 import { nextTick, ref } from 'vue'
 import type { EvaluationRecord, EvaluationRequest } from '~/api/valuation'
 import type { ConversationTimelineEntry } from '~/components/valuation/ValuationTimeline.vue'
+import type { ExplanationAnswer } from '~/utils/valuationExplanations'
 
 export function useConversationTimeline(touch: () => unknown) {
   const entries = ref<ConversationTimelineEntry[]>([{
@@ -26,10 +27,14 @@ export function useConversationTimeline(touch: () => unknown) {
     touch()
   }
 
-  async function appendResult(record: EvaluationRecord, snapshot: EvaluationRequest) {
-    entries.value.push({ id: ++sequence, kind: 'result', record, snapshot })
+  async function appendResult(record: EvaluationRecord, snapshot: EvaluationRequest, operationId?: string) {
+    entries.value.push({ id: ++sequence, kind: 'result', record, snapshot, operationId: operationId ?? `evaluation-${record.id}` })
     await nextTick()
     document.querySelector('.inline-result:last-of-type')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function appendExplanation(answer: ExplanationAnswer) {
+    entries.value.push({ id: ++sequence, kind: 'explanation', answer })
   }
 
   function reset() {
@@ -41,5 +46,5 @@ export function useConversationTimeline(touch: () => unknown) {
     }]
   }
 
-  return { entries, messageText, sendMessage, appendResult, reset }
+  return { entries, messageText, sendMessage, appendResult, appendExplanation, reset }
 }

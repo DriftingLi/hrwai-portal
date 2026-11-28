@@ -4,7 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ValuationConversation from '~/components/valuation/ValuationConversation.vue'
 import { createDraftFields, type DraftFields } from '~/utils/valuationConversation'
-import type { EvaluationRequest, TrialPolicy, TrialRequest, TrialResult } from '~/api/valuation'
+import type { EvaluationRequest, TrialPolicy, TrialRequest, TrialResult, UpstreamConversationExplanation } from '~/api/valuation'
 
 let serverFields: DraftFields = createDraftFields()
 let serverVersion = 0
@@ -107,6 +107,13 @@ const apiMock = {
   })),
   getConversationOperation: vi.fn(),
   getEvaluation: vi.fn(),
+  createConversationExplanation: vi.fn(async (body: { operation_id: string; card: { kind: string } }): Promise<UpstreamConversationExplanation> => ({
+    operation_id: body.operation_id,
+    status: 'succeeded',
+    answer: body.card.kind === 'formal' ? '正式卡采用 4,800 小时，预估残值 ¥3.36 万。' : '试算卡采用冻结快照，参考区间 ¥3.00 ~ ¥4.50 万。',
+    remaining_quota: 6
+  })),
+  getConversationExplanation: vi.fn(),
   listVehicleTypes: vi.fn(async () => [{ id: 1, name: '电动平衡重式', power_type: 'electric', earliest_factory_year: 2000 }]),
   listSeries: vi.fn(async () => [{ id: 1, brand: '林德', name: 'E系列', earliest_factory_year: 2000 }]),
   listTonnages: vi.fn(async () => [{ id: 1, value: 2 }]),
@@ -183,6 +190,13 @@ describe('对话内联评估组件', () => {
     serverHistory = []
     apiMock.estimateTrial.mockReset()
     apiMock.estimateTrial.mockImplementation(async (request: TrialRequest) => trialResult(request))
+    apiMock.createConversationExplanation.mockReset()
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: { kind: string } }): Promise<UpstreamConversationExplanation> => ({
+      operation_id: body.operation_id,
+      status: 'succeeded',
+      answer: body.card.kind === 'formal' ? '正式卡采用 4,800 小时，预估残值 ¥3.36 万。' : '试算卡采用冻结快照，参考区间 ¥3.00 ~ ¥4.50 万。',
+      remaining_quota: 6
+    }))
     vi.clearAllMocks()
   })
 
@@ -341,7 +355,9 @@ describe('对话内联评估组件', () => {
     expect(apiMock.estimateTrial.mock.calls[0]![0]).not.toHaveProperty('snapshot_id')
     expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe('priced')
     expect(wrapper.get('[data-test="trial-card"]').text()).toContain('¥3.00 ~ ¥4.50 万')
-    expect(wrapper.findAll('[data-test="trial-card"] a, [data-test="trial-card"] button')).toHaveLength(0)
+    expect(wrapper.findAll('[data-test="trial-card"] a')).toHaveLength(0)
+    expect(wrapper.findAll('[data-test="trial-card"] button')).toHaveLength(1)
+    expect(wrapper.get('[data-test="explain-trial"]').attributes('disabled')).toBeUndefined()
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
   })
 
@@ -412,7 +428,9 @@ describe('对话内联评估组件', () => {
 
     expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe(status)
     expect(wrapper.get('[data-test="trial-card"]').text()).toContain(result.message)
-    expect(wrapper.findAll('[data-test="trial-card"] a, [data-test="trial-card"] button')).toHaveLength(0)
+    expect(wrapper.findAll('[data-test="trial-card"] a')).toHaveLength(0)
+    expect(wrapper.findAll('[data-test="trial-card"] button')).toHaveLength(1)
+    expect(wrapper.get('[data-test="explain-trial"]').attributes('disabled')).toBeDefined()
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
   })
 
@@ -433,5 +451,142 @@ describe('对话内联评估组件', () => {
     expect(wrapper.get('[data-test="result-snapshot-88"]').text()).toContain('4800 小时')
     expect(wrapper.get('[data-test="result-snapshot-88"]').text()).not.toContain('6200')
     expect(apiMock.createConversationOperation).toHaveBeenCalledTimes(2)
+  })
+
+  it('正式卡与试算卡可分别解释，同一问题绑定各自快照且历史答复不串卡', async () => {
+    const wrapper = await mountPage(1, true)
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+
+    await wrapper.get('[data-test="explain-formal-88"]').trigger('click')
+    expect(wrapper.get('[data-test="selected-explanation-card"]').text()).toContain('正式评估 #88')
+    await wrapper.get('[data-test="message-input"]').setValue('哪些因素影响估价？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('[data-test="explain-trial"]').trigger('click')
+    expect(wrapper.get('[data-test="selected-explanation-card"]').text()).toContain('参考试算')
+    await wrapper.get('[data-test="message-input"]').setValue('哪些因素影响估价？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+
+    const requests = apiMock.createConversationExplanation.mock.calls.map(([body]) => body)
+    expect(requests).toHaveLength(2)
+    expect(requests[0]).toMatchObject({
+      draft_version: 2,
+      card: { kind: 'formal', evaluation_id: 88, operation_id: expect.any(String) },
+      question: '哪些因素影响估价？'
+    })
+    expect(requests[1]).toMatchObject({
+      draft_version: 2,
+      card: { kind: 'trial', request_id: expect.any(String), snapshot_id: 'frozen-snapshot' },
+      question: '哪些因素影响估价？'
+    })
+    const entries = wrapper.findAll('[data-test="explanation-entry"]')
+    expect(entries).toHaveLength(2)
+    expect(entries[0]!.text()).toContain('正式评估 #88')
+    expect(entries[0]!.text()).toContain('¥3.36 万')
+    expect(entries[0]!.text()).not.toContain('¥4.50 万')
+    expect(entries[1]!.text()).toContain('参考试算')
+    expect(entries[1]!.text()).toContain('¥3.00 ~ ¥4.50 万')
+    expect(entries[1]!.text()).not.toContain('¥3.36 万')
+    expect(wrapper.get('[data-test="explanation-quota"]').text()).toContain('6')
+  })
+
+  it('纠错后旧正式卡和 stale 试算卡仍可解释，请求保留旧快照标识', async () => {
+    const wrapper = await mountPage(1, true)
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await wrapper.get('[data-test="toggle-draft"]').trigger('click')
+    await wrapper.get('[data-test="usage_hours"]').setValue('6200')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.get('[data-test="trial-card"]').attributes('data-stale')).toBe('true'))
+
+    await wrapper.get('[data-test="explain-trial"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('旧卡为什么采用原工时？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+    expect(apiMock.createConversationExplanation.mock.calls[0]![0]).toMatchObject({
+      draft_version: 3,
+      card: { kind: 'trial', snapshot_id: 'frozen-snapshot' }
+    })
+    expect(wrapper.get('[data-test="trial-card"]').text()).toContain('4,800 小时')
+
+    await wrapper.get('[data-test="explain-formal-88"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('旧正式卡为什么不变？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+    expect(apiMock.createConversationExplanation.mock.calls[1]![0].card).toMatchObject({
+      kind: 'formal', evaluation_id: 88
+    })
+    expect(wrapper.get('[data-test="result-snapshot-88"]').text()).toContain('4800 小时')
+  })
+
+  it('反事实工时只显示引导按钮：正式卡先打开既有核对，试算卡由用户触发重算且旧卡不变', async () => {
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string }) => ({
+      operation_id: body.operation_id, status: 'succeeded',
+      answer: '请按当前草稿重新计算，旧结果卡不会被覆盖。', action: 'recalculate', remaining_quota: 5
+    }))
+    const wrapper = await mountPage(1, true)
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+
+    await wrapper.get('[data-test="explain-formal-88"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('改成 6200 小时会差多少钱？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-test="explanation-entry"]').text()).not.toMatch(/差价|¥|万元/)
+    await wrapper.get('[data-test="recalculate-formal"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="confirm"]').exists()).toBe(true)
+    expect(apiMock.createConversationOperation).toHaveBeenCalledTimes(1)
+
+    await wrapper.get('[data-test="explain-trial"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('改成 6200 小时会差多少钱？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+    const oldRequestId = wrapper.get('[data-test="trial-card"]').attributes('data-request-id')
+    await wrapper.get('[data-test="recalculate-trial-from-explanation"]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(2))
+    expect(apiMock.estimateTrial).toHaveBeenCalledTimes(2)
+    expect(wrapper.findAll('[data-test="trial-card"]')[0]!.attributes('data-request-id')).toBe(oldRequestId)
+    expect(wrapper.findAll('[data-test="trial-card"]')[0]!.text()).toContain('4,800 小时')
+  })
+
+  it('额度失败展示固定说明与剩余额度，不移除卡片和报告权限', async () => {
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string }) => ({
+      operation_id: body.operation_id, status: 'failed', reason_code: 'quota_exhausted',
+      remaining_quota: 0, degraded: true
+    }))
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await wrapper.get('[data-test="explain-formal-88"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('为什么？')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="explanation-entry"]').text()).toContain('解释额度已用完，请稍后再试。你仍可查看当前卡片和报告。')
+    expect(wrapper.get('[data-test="explanation-quota"]').text()).toContain('0')
+    expect(wrapper.get('[data-test="explanation-degraded"]').text()).toContain('降级')
+    expect(wrapper.findAll('section.result-card')).toHaveLength(1)
+    expect(wrapper.find('a[href="/api/valuation/evaluations/88/report"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/valuation/report/88"]').exists()).toBe(true)
+  })
+
+  it('重复提交同一解释只创建一个 operation', async () => {
+    let resolve!: (value: UpstreamConversationExplanation) => void
+    apiMock.createConversationExplanation.mockReturnValue(new Promise<UpstreamConversationExplanation>((done) => { resolve = done }))
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await wrapper.get('[data-test="explain-formal-88"]').trigger('click')
+    await wrapper.get('[data-test="message-input"]').setValue('为什么？')
+    const first = wrapper.get('[data-test="message-form"]').trigger('submit')
+    const second = wrapper.get('[data-test="message-form"]').trigger('submit')
+    await Promise.all([first, second])
+    expect(apiMock.createConversationExplanation).toHaveBeenCalledTimes(1)
+    resolve({ operation_id: apiMock.createConversationExplanation.mock.calls[0]![0].operation_id, status: 'succeeded', answer: '完成' })
+    await flushPromises()
   })
 })

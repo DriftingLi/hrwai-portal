@@ -1,6 +1,13 @@
 <template>
   <div class="conversation-layout">
-    <ValuationTimeline :entries="timeline.entries.value" :load-error="loadError" :expired-notice="expiredNotice" />
+    <ValuationTimeline
+      :entries="timeline.entries.value"
+      :load-error="loadError"
+      :expired-notice="expiredNotice"
+      :selected-card-key="explanations.selectedKey.value"
+      @select="selectExplanation"
+      @recalculate="recalculateExplanation"
+    />
 
     <section v-if="trialEnabled" class="trial-results" aria-labelledby="trial-results-title" data-test="trial-results">
       <header class="trial-results-head">
@@ -21,6 +28,9 @@
         :result="card.result"
         :stale="card.stale"
         :request-id="card.requestId"
+        explainable
+        :selected="isTrialSelected(card)"
+        @explain="selectTrialExplanation(card)"
       />
     </section>
 
@@ -75,19 +85,25 @@
       </ValuationDraftEditor>
     </section>
 
-    <form class="composer" data-test="message-form" @submit.prevent="timeline.sendMessage">
-      <label class="sr-only" for="conversation-message">叉车信息或问题</label>
-      <input id="conversation-message" v-model="timeline.messageText.value" data-test="message-input" placeholder="描述车辆，或补充工时；当前版本请用下方草稿完成字段确认" />
-      <button type="submit" class="primary-button" :disabled="!timeline.messageText.value.trim()">发送</button>
-    </form>
+    <ValuationResultExplainer
+      :selection="explanations.selected.value"
+      :question="timeline.messageText.value"
+      :loading="explanations.loading.value"
+      :remaining-quota="explanations.remainingQuota.value"
+      :degraded="explanations.degraded.value"
+      @update:question="timeline.messageText.value = $event"
+      @submit="submitMessage"
+      @clear="explanations.clear"
+    />
     <p class="memory-note">消息与结果卡仅保留在当前页面；刷新只恢复未过期的草稿与字段依据。</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Brand, ConditionRating, TrialPolicy } from '~/api/valuation'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Brand, ConditionRating, TrialPolicy, ValuationExplanationCard } from '~/api/valuation'
 import { useValuationApi } from '~/composables/useValuationApi'
+import { useValuationExplanations } from '~/composables/useValuationExplanations'
 import { isTrialDraftReady, useTrialEstimate } from '~/composables/useTrialEstimate'
 import { useValuationConversation } from '~/composables/useValuationConversation'
 import { useConversationDictionaries } from '~/composables/useConversationDictionaries'
@@ -100,6 +116,12 @@ import {
   type DraftFieldKey
 } from '~/utils/valuationConversation'
 import { conversationDraftSummary, valuationConversationDemo as demoValues } from '~/utils/valuationConversationFields'
+import {
+  explanationCardKey,
+  trialExplanationCard,
+  trialExplanationLabel
+} from '~/utils/valuationExplanations'
+import type { TrialEstimateCard } from '~/composables/useTrialEstimate'
 
 const props = withDefaults(defineProps<{
   brands: Brand[]
@@ -119,6 +141,7 @@ const summary = computed(() => conversationDraftSummary(fields.value))
 const timeline = useConversationTimeline(() => controller.touch())
 const review = useConversationReview(draft, complete, () => controller.touch())
 const trial = useTrialEstimate({ enabled: props.trialEnabled, policy: props.trialPolicy })
+const explanations = useValuationExplanations()
 const trialDraft = computed(() => draftFieldsToTrial(fields.value))
 const trialReady = computed(() => isTrialDraftReady(trialDraft.value))
 watch(fields, (value) => {
@@ -180,6 +203,7 @@ async function reset() {
     await controller.reset()
     dictionaries.clearOptions()
     timeline.reset()
+    explanations.clear()
     review.reset()
     draftExpanded.value = false
     expiredNotice.value = false
@@ -189,6 +213,51 @@ function toggleDraft() {
   draftExpanded.value = !draftExpanded.value
   void controller.touch()
 }
+function selectExplanation(selection: { card: ValuationExplanationCard; label: string }) {
+  explanations.select(selection.card, selection.label)
+}
+function selectTrialExplanation(card: TrialEstimateCard) {
+  const target = trialExplanationCard(card.requestId, card.result)
+  if (!target) return
+  explanations.select(target, trialExplanationLabel(card.requestId, card.result))
+}
+function isTrialSelected(card: TrialEstimateCard): boolean {
+  const target = trialExplanationCard(card.requestId, card.result)
+  return Boolean(target && explanations.selectedKey.value === explanationCardKey(target))
+}
+async function submitMessage() {
+  const question = timeline.messageText.value.trim()
+  if (!question || explanations.loading.value) return
+  if (!explanations.selected.value) {
+    timeline.sendMessage()
+    return
+  }
+  timeline.messageText.value = ''
+  await guarded(async () => {
+    const answer = await explanations.ask(question, draft.value?.version ?? 0)
+    timeline.appendExplanation(answer)
+  })
+}
+async function recalculateExplanation(card: ValuationExplanationCard) {
+  actionError.value = ''
+  if (card.kind === 'trial') {
+    if (!trialReady.value) {
+      actionError.value = '请先按当前草稿补全试算所需信息，再重新试算。'
+      draftExpanded.value = true
+      return
+    }
+    await guarded(() => trial.recalculate())
+    return
+  }
+  draftExpanded.value = true
+  if (!complete.value) {
+    actionError.value = '请先补全并核对当前草稿，再重新评估。'
+    return
+  }
+  review.openReview()
+  await nextTick()
+  document.querySelector('.draft-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 async function submitFormal() {
   if (submittingFormal.value) return
   const snapshot = draft.value ? draftToEvaluationRequest(draft.value) : null
@@ -196,7 +265,7 @@ async function submitFormal() {
   submittingFormal.value = true
   await guarded(async () => {
     const record = await controller.confirm(review.version.value)
-    await timeline.appendResult(record, snapshot)
+    await timeline.appendResult(record, snapshot, controller.getOperationId())
     review.close()
     draftExpanded.value = false
   })

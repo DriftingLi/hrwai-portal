@@ -1,4 +1,4 @@
-import type { DraftFields } from '~/utils/valuationConversation'
+import type { ConversationOperation, DraftFields } from '~/utils/valuationConversation'
 
 /** FL backend/internal/valuation/conversation_dto.go 的 wire 契约，不在门户另造 draft_version/status 形状。 */
 export interface UpstreamDraftField {
@@ -378,6 +378,58 @@ export interface EvaluationListQuery {
   vehicle_type?: string
 }
 
+export type ValuationExplanationCard =
+  | { kind: 'formal'; operation_id: string; evaluation_id: number }
+  | { kind: 'trial'; request_id: string; snapshot_id: string }
+
+export interface ConversationExplanationRequest {
+  operation_id: string
+  /** 当前草稿版本；草稿已过期或不在页面时传 0，解释仍绑定 card 的既有快照。 */
+  draft_version: number
+  card: ValuationExplanationCard
+  question: string
+}
+
+export interface UpstreamConversationExplanation {
+  id?: string
+  operation_id?: string
+  status: 'pending' | 'succeeded' | 'failed'
+  card?: ValuationExplanationCard
+  answer?: string
+  content?: string
+  text?: string
+  message?: string
+  explanation?: {
+    answer?: string
+    content?: string
+    text?: string
+    message?: string
+    action?: 'recalculate' | { type?: string }
+    evidence_ids?: string[]
+  }
+  result?: {
+    answer?: string
+    content?: string
+    text?: string
+    message?: string
+    action?: 'recalculate' | { type?: string }
+    evidence_ids?: string[]
+  }
+  action?: 'recalculate' | { type?: string }
+  next_action?: 'recalculate' | { type?: string }
+  evidence_ids?: string[]
+  reason_code?: string
+  error_code?: string
+  remaining_quota?: number
+  quota_remaining?: number
+  quota?: {
+    remaining?: number
+    remaining_quota?: number
+    degraded?: boolean
+  }
+  degraded?: boolean
+}
+
 // ===== 电池 RUL 评估 =====
 
 export type BatteryType = 'lfp' | 'ncm' | 'other'
@@ -616,6 +668,12 @@ export function createValuationApi(fetcher: ValuationFetcher) {
     }) => post<ConversationOperation>(`${VALUATION_API_PREFIX}/conversation/operations`, body),
     getConversationOperation: (id: string) =>
       get<ConversationOperation>(
+        `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
+      ),
+    createConversationExplanation: (body: ConversationExplanationRequest) =>
+      post<UpstreamConversationExplanation>(`${VALUATION_API_PREFIX}/conversation/explanations`, body),
+    getConversationExplanation: (id: string) =>
+      get<UpstreamConversationExplanation>(
         `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
       ),
     async estimateTrial(request: TrialRequest): Promise<TrialResult> {

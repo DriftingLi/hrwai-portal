@@ -1,5 +1,5 @@
 <template>
-  <section class="result-card" aria-live="polite">
+  <section class="result-card" :class="{ 'is-selected': selected }" :data-selected="selected ? 'true' : 'false'" aria-live="polite">
     <header class="result-head">
       <div class="result-identity">
         <p class="result-eyebrow">评估完成 · 记录 #{{ record.id }}</p>
@@ -74,6 +74,9 @@
     </div>
 
     <footer class="result-actions">
+      <button v-if="explainable" type="button" class="btn-ghost" :data-test="`explain-formal-${record.id}`" @click="emit('explain')">
+        {{ selected ? '已选中 · 解释这张卡' : '解释这张卡' }}
+      </button>
       <a :href="evaluationReportPath(record.id)" class="btn-ghost" target="_blank" rel="noopener">
         下载 PDF 报告
       </a>
@@ -97,9 +100,12 @@ import {
   residualRate
 } from '~/utils/valuationFormat'
 
-withDefaults(defineProps<{ record: EvaluationRecord; showDetailLink?: boolean }>(), {
-  showDetailLink: true
+withDefaults(defineProps<{ record: EvaluationRecord; showDetailLink?: boolean; explainable?: boolean; selected?: boolean }>(), {
+  showDetailLink: true,
+  explainable: false,
+  selected: false
 })
+const emit = defineEmits<{ explain: [] }>()
 
 /** 维度分 0-100（后端口径）；越界值夹到 0-100，避免进度条溢出 */
 function barWidth(value: number): string {
@@ -115,6 +121,10 @@ function barWidth(value: number): string {
   border-radius: var(--radius-xl);
   padding: var(--space-8);
   box-shadow: var(--shadow-md);
+}
+.result-card.is-selected {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px var(--color-primary-100), var(--shadow-md);
 }
 .result-head {
   display: flex;

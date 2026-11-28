@@ -258,6 +258,36 @@ describe('对话草稿端点路径', () => {
     expect(calls[2]?.init?.body).toEqual({ base_version: 2 })
   })
 
+  it('解释操作提交卡片快照与草稿版本，并按 operation_id 查询', async () => {
+    const operation = {
+      id: 'explanation-1',
+      operation_id: 'explanation-1',
+      status: 'succeeded',
+      answer: '该卡采用 4,800 小时快照。'
+    }
+    const { api, calls } = setup(() => wrapped(operation))
+    const request = {
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal' as const, operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么是这个残值？'
+    }
+
+    await expect(api.createConversationExplanation(request)).resolves.toEqual(operation)
+    await expect(api.getConversationExplanation('explanation/1')).resolves.toEqual(operation)
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/explanations',
+        init: { method: 'POST', body: request }
+      },
+      {
+        path: '/api/valuation/conversation/operations/explanation%2F1',
+        init: { method: 'GET' }
+      }
+    ])
+  })
+
   it('操作提交和查询保留同一 operation_id，并解包正式结果', async () => {
     const operation = {
       id: 'operation-1',

@@ -329,7 +329,8 @@ export function createValuationConversationController(api: ConversationApi, opti
   return {
     draft, loading, saving, confirming, error, canUndo, complete, expired,
     restore, touch, expireIfIdle, setField, setFields, setDictionaryValue,
-    setUnknown, setRange, revalidateFields, undo, confirm, reset
+    setUnknown, setRange, revalidateFields, undo, confirm, reset,
+    getOperationId: () => operationId
   }
 }
 
