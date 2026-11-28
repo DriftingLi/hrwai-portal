@@ -89,7 +89,6 @@
       :selection="explanations.selected.value"
       :question="timeline.messageText.value"
       :loading="explanations.loading.value"
-      :remaining-quota="explanations.remainingQuota.value"
       :degraded="explanations.degraded.value"
       @update:question="timeline.messageText.value = $event"
       @submit="submitMessage"

@@ -4,7 +4,15 @@ import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ValuationConversation from '~/components/valuation/ValuationConversation.vue'
 import { createDraftFields, type DraftFields } from '~/utils/valuationConversation'
-import type { EvaluationRequest, TrialPolicy, TrialRequest, TrialResult, UpstreamConversationExplanation } from '~/api/valuation'
+import type {
+  EvaluationRequest,
+  TrialPolicy,
+  TrialRequest,
+  TrialResult,
+  UpstreamConversationExplanation,
+  ValuationExplanationCard
+} from '~/api/valuation'
+import { explanationOperation } from '~/utils/__tests__/valuationExplanationFixtures'
 
 let serverFields: DraftFields = createDraftFields()
 let serverVersion = 0
@@ -58,6 +66,19 @@ function trialResult(request: TrialRequest): TrialResult {
   }
 }
 
+/** 唯一的解释 mock 工厂：初始 apiMock 与 beforeEach 复位共用，避免两份实现漂移。 */
+function explanationReply(
+  body: { operation_id: string; card: ValuationExplanationCard },
+  options: { template?: string; action?: 'explain' | 'recalculate' } = {}
+): UpstreamConversationExplanation {
+  return explanationOperation(body, {
+    template: options.template ?? (body.card.kind === 'formal'
+      ? '正式卡采用 4,800 小时，预估残值 ¥3.36 万。'
+      : '试算卡采用冻结快照，参考区间 ¥3.00 ~ ¥4.50 万。'),
+    ...(options.action ? { action: options.action } : {})
+  })
+}
+
 const apiMock = {
   estimateTrial: vi.fn(async (request: TrialRequest) => trialResult(request)),
   createConversationDraft: vi.fn(async () => {
@@ -107,12 +128,9 @@ const apiMock = {
   })),
   getConversationOperation: vi.fn(),
   getEvaluation: vi.fn(),
-  createConversationExplanation: vi.fn(async (body: { operation_id: string; card: { kind: string } }): Promise<UpstreamConversationExplanation> => ({
-    operation_id: body.operation_id,
-    status: 'succeeded',
-    answer: body.card.kind === 'formal' ? '正式卡采用 4,800 小时，预估残值 ¥3.36 万。' : '试算卡采用冻结快照，参考区间 ¥3.00 ~ ¥4.50 万。',
-    remaining_quota: 6
-  })),
+  createConversationExplanation: vi.fn(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+    explanationReply(body)
+  ),
   getConversationExplanation: vi.fn(),
   listVehicleTypes: vi.fn(async () => [{ id: 1, name: '电动平衡重式', power_type: 'electric', earliest_factory_year: 2000 }]),
   listSeries: vi.fn(async () => [{ id: 1, brand: '林德', name: 'E系列', earliest_factory_year: 2000 }]),
@@ -182,6 +200,17 @@ async function confirm(wrapper: Awaited<ReturnType<typeof mountPage>>) {
   await flushPromises()
 }
 
+async function askExplanation(
+  wrapper: Awaited<ReturnType<typeof mountPage>>,
+  question = '为什么？',
+  select: '[data-test="explain-formal-88"]' | '[data-test="explain-trial"]' = '[data-test="explain-formal-88"]'
+) {
+  await wrapper.get(select).trigger('click')
+  await wrapper.get('[data-test="message-input"]').setValue(question)
+  await wrapper.get('[data-test="message-form"]').trigger('submit')
+  await flushPromises()
+}
+
 describe('对话内联评估组件', () => {
   beforeEach(() => {
     sessionStorage.clear()
@@ -191,12 +220,9 @@ describe('对话内联评估组件', () => {
     apiMock.estimateTrial.mockReset()
     apiMock.estimateTrial.mockImplementation(async (request: TrialRequest) => trialResult(request))
     apiMock.createConversationExplanation.mockReset()
-    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: { kind: string } }): Promise<UpstreamConversationExplanation> => ({
-      operation_id: body.operation_id,
-      status: 'succeeded',
-      answer: body.card.kind === 'formal' ? '正式卡采用 4,800 小时，预估残值 ¥3.36 万。' : '试算卡采用冻结快照，参考区间 ¥3.00 ~ ¥4.50 万。',
-      remaining_quota: 6
-    }))
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+      explanationReply(body)
+    )
     vi.clearAllMocks()
   })
 
@@ -490,7 +516,10 @@ describe('对话内联评估组件', () => {
     expect(entries[1]!.text()).toContain('参考试算')
     expect(entries[1]!.text()).toContain('¥3.00 ~ ¥4.50 万')
     expect(entries[1]!.text()).not.toContain('¥3.36 万')
-    expect(wrapper.get('[data-test="explanation-quota"]').text()).toContain('6')
+    for (const entry of entries) {
+      expect(entry.get('[data-test="explanation-meta"]').text()).toContain('依据已校验')
+      expect(entry.get('[data-test="explanation-meta"]').text()).toContain('1 条证据')
+    }
   })
 
   it('纠错后旧正式卡和 stale 试算卡仍可解释，请求保留旧快照标识', async () => {
@@ -523,10 +552,9 @@ describe('对话内联评估组件', () => {
   })
 
   it('反事实工时只显示引导按钮：正式卡先打开既有核对，试算卡由用户触发重算且旧卡不变', async () => {
-    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string }) => ({
-      operation_id: body.operation_id, status: 'succeeded',
-      answer: '请按当前草稿重新计算，旧结果卡不会被覆盖。', action: 'recalculate', remaining_quota: 5
-    }))
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+      explanationReply(body, { action: 'recalculate', template: '请按当前草稿重新计算，旧结果卡不会被覆盖。' })
+    )
     const wrapper = await mountPage(1, true)
     await loadDemo(wrapper)
     await confirm(wrapper)
@@ -553,11 +581,10 @@ describe('对话内联评估组件', () => {
     expect(wrapper.findAll('[data-test="trial-card"]')[0]!.text()).toContain('4,800 小时')
   })
 
-  it('额度失败展示固定说明与剩余额度，不移除卡片和报告权限', async () => {
-    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string }) => ({
-      operation_id: body.operation_id, status: 'failed', reason_code: 'quota_exhausted',
-      remaining_quota: 0, degraded: true
-    }))
+  it('额度失败展示固定说明与降级标记，不移除卡片和报告权限', async () => {
+    apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+      explanationOperation(body, { status: 'failed', errorCode: 'suggestion_quota_exceeded' })
+    )
     const wrapper = await mountPage()
     await loadDemo(wrapper)
     await confirm(wrapper)
@@ -566,8 +593,11 @@ describe('对话内联评估组件', () => {
     await wrapper.get('[data-test="message-form"]').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.get('[data-test="explanation-entry"]').text()).toContain('解释额度已用完，请稍后再试。你仍可查看当前卡片和报告。')
-    expect(wrapper.get('[data-test="explanation-quota"]').text()).toContain('0')
+    const entry = wrapper.get('[data-test="explanation-entry"]')
+    expect(entry.text()).toContain('解释额度已用完，请稍后再试。你仍可查看当前卡片和报告。')
+    expect(entry.get('[data-test="explanation-meta"]').attributes('data-failure-kind')).toBe('quota')
+    expect(entry.get('[data-test="explanation-meta"]').text()).toContain('固定说明')
+    expect(entry.get('[data-test="explanation-meta"]').text()).not.toContain('依据已校验')
     expect(wrapper.get('[data-test="explanation-degraded"]').text()).toContain('降级')
     expect(wrapper.findAll('section.result-card')).toHaveLength(1)
     expect(wrapper.find('a[href="/api/valuation/evaluations/88/report"]').exists()).toBe(true)
@@ -586,7 +616,63 @@ describe('对话内联评估组件', () => {
     const second = wrapper.get('[data-test="message-form"]').trigger('submit')
     await Promise.all([first, second])
     expect(apiMock.createConversationExplanation).toHaveBeenCalledTimes(1)
-    resolve({ operation_id: apiMock.createConversationExplanation.mock.calls[0]![0].operation_id, status: 'succeeded', answer: '完成' })
+    resolve(explanationReply({
+      operation_id: apiMock.createConversationExplanation.mock.calls[0]![0].operation_id,
+      card: apiMock.createConversationExplanation.mock.calls[0]![0].card
+    }, { template: '完成' }))
     await flushPromises()
+  })
+
+  it.each([
+    ['卡片身份不符', async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+      explanationOperation(body, { cardKey: 'other-card', template: '不该展示的答复' })],
+    ['证据为空', async (body: { operation_id: string; card: ValuationExplanationCard }) =>
+      explanationOperation(body, { evidenceIds: [], template: '不该展示的答复' })]
+  ])('引用校验失败（%s）显示固定说明，不显示“依据已校验”', async (_label, respond) => {
+    apiMock.createConversationExplanation.mockImplementation(respond)
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await askExplanation(wrapper)
+
+    const entry = wrapper.get('[data-test="explanation-entry"]')
+    expect(entry.text()).toContain('解释引用校验失败，本次答复已隐藏，请稍后再试。你仍可查看当前卡片和报告。')
+    expect(entry.text()).not.toContain('不该展示的答复')
+    const meta = entry.get('[data-test="explanation-meta"]')
+    expect(meta.attributes('data-failure-kind')).toBe('citation_invalid')
+    expect(meta.text()).toContain('固定说明')
+    expect(meta.text()).not.toContain('依据已校验')
+    expect(meta.text()).not.toContain('条证据')
+  })
+
+  it('请求超时显示固定超时说明，不伪造答复', async () => {
+    apiMock.createConversationExplanation.mockRejectedValue(
+      Object.assign(new Error('Request timed out after 10000ms'), { name: 'TimeoutError' })
+    )
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await askExplanation(wrapper)
+
+    const entry = wrapper.get('[data-test="explanation-entry"]')
+    expect(entry.text()).toContain('解释请求超时，尚未收到答复，请稍后再试。你仍可查看当前卡片和报告。')
+    expect(entry.get('[data-test="explanation-meta"]').attributes('data-failure-kind')).toBe('timeout')
+    expect(entry.get('[data-test="explanation-meta"]').text()).not.toContain('依据已校验')
+  })
+
+  it('越权访问返回固定提示，且不进入降级态', async () => {
+    apiMock.createConversationExplanation.mockRejectedValue(
+      Object.assign(new Error('upstream private detail'), { statusCode: 403 })
+    )
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await confirm(wrapper)
+    await askExplanation(wrapper)
+
+    const entry = wrapper.get('[data-test="explanation-entry"]')
+    expect(entry.text()).toContain('该结果暂不可解释，请检查登录状态或结果权限。')
+    expect(entry.text()).not.toContain('private detail')
+    expect(entry.get('[data-test="explanation-meta"]').attributes('data-failure-kind')).toBe('forbidden')
+    expect(wrapper.find('[data-test="explanation-degraded"]').exists()).toBe(false)
   })
 })

@@ -8,9 +8,11 @@ import {
 } from '~/api/valuation'
 import {
   EXPLANATION_FAILURE_MESSAGES,
+  EXPLANATION_POLL_INTERVAL_MS,
+  EXPLANATION_TOTAL_TIMEOUT_MS,
   explanationCardKey,
   explanationFailureKind,
-  sameExplanationCard,
+  explanationOperationKey,
   type ExplanationAnswer,
   type ExplanationFailureKind,
   type ExplanationSelection
@@ -24,7 +26,11 @@ export type ValuationExplanationApi = Pick<ValuationApi,
 interface ExplanationControllerOptions {
   newOperationId?: () => string
   sleep?: (milliseconds: number) => Promise<void>
+  now?: () => number
+  totalTimeoutMs?: number
 }
+
+const MAX_POLLS = 60
 
 function fallbackOperationId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -35,22 +41,22 @@ function cloneCard(card: ValuationExplanationCard): ValuationExplanationCard {
   return Object.freeze({ ...card })
 }
 
-function remainingQuota(operation: UpstreamConversationExplanation): number | undefined {
-  const candidates = [operation.remaining_quota, operation.quota_remaining, operation.quota?.remaining, operation.quota?.remaining_quota]
-  return candidates.find((value): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0)
+/** ofetch 超时以 TimeoutError 抛出，没有 HTTP 状态码，必须单独识别成固定超时说明。 */
+function isTimeoutError(cause: unknown): boolean {
+  if (!cause || typeof cause !== 'object') return false
+  const record = cause as { name?: unknown; message?: unknown }
+  return record.name === 'TimeoutError' || /timeout|timed out/i.test(String(record.message ?? ''))
 }
 
-function explanationAction(operation: UpstreamConversationExplanation): 'recalculate' | undefined {
-  const action = operation.explanation?.action ?? operation.result?.action ?? operation.action ?? operation.next_action
-  const type = typeof action === 'string' ? action : action?.type
-  return type === 'recalculate' ? 'recalculate' : undefined
-}
-
-function explanationText(operation: UpstreamConversationExplanation): string {
-  const value = operation.explanation?.answer ?? operation.explanation?.content ?? operation.explanation?.text ?? operation.explanation?.message ??
-    operation.result?.answer ?? operation.result?.content ?? operation.result?.text ?? operation.result?.message ??
-    operation.answer ?? operation.content ?? operation.text ?? operation.message
-  return typeof value === 'string' ? value.trim() : ''
+/** FL 以 operation_key + card_kind/card_key 标识解释所属请求；任一不符即引用失败。 */
+function operationMatchesRequest(
+  operation: UpstreamConversationExplanation,
+  card: ValuationExplanationCard,
+  operationId: string
+): boolean {
+  const cardKey = card.kind === 'formal' ? card.operation_id : card.request_id
+  return operation.card_kind === card.kind && operation.card_key === cardKey &&
+    operation.operation_id === explanationOperationKey(card, operationId)
 }
 
 export function createValuationExplanationController(
@@ -60,10 +66,11 @@ export function createValuationExplanationController(
   const selected = ref<ExplanationSelection | null>(null)
   const selectedKey = computed(() => selected.value ? explanationCardKey(selected.value.card) : '')
   const loading = ref(false)
-  const remaining = ref<number | null>(null)
   const degraded = ref(false)
   const newOperationId = options.newOperationId ?? fallbackOperationId
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
+  const now = options.now ?? (() => Date.now())
+  const totalTimeoutMs = options.totalTimeoutMs ?? EXPLANATION_TOTAL_TIMEOUT_MS
   let sequence = 0
   let pendingRequests = 0
   let active: { key: string; promise: Promise<ExplanationAnswer> } | null = null
@@ -80,18 +87,22 @@ export function createValuationExplanationController(
   function failure(
     selection: ExplanationSelection,
     question: string,
-    kind: ExplanationFailureKind,
-    operation?: UpstreamConversationExplanation
+    kind: ExplanationFailureKind
   ): ExplanationAnswer {
-    const isDegraded = operation?.degraded ?? operation?.quota?.degraded ?? kind !== 'forbidden'
     return {
       ...selection,
       question,
       state: 'failure',
+      failureKind: kind,
       message: EXPLANATION_FAILURE_MESSAGES[kind],
       evidenceIds: [],
-      degraded: isDegraded
+      degraded: kind !== 'forbidden'
     }
+  }
+
+  function trackAnswer(requestSequence: number, kind: ExplanationFailureKind | null) {
+    if (requestSequence !== sequence) return
+    degraded.value = kind !== null && kind !== 'forbidden'
   }
 
   async function run(
@@ -109,41 +120,55 @@ export function createValuationExplanationController(
     }
     try {
       let operation = await api.createConversationExplanation(request)
-      for (let attempt = 0; operation?.status === 'pending'; attempt += 1) {
-        if (attempt >= 60) return failure(selection, question, 'timeout', operation)
-        await sleep(1000)
-        operation = await api.getConversationExplanation(operationId)
+      if (!operationMatchesRequest(operation, selection.card, operationId)) {
+        trackAnswer(requestSequence, 'citation_invalid')
+        return failure(selection, question, 'citation_invalid')
       }
-      if (!operation || (operation.operation_id ?? operation.id) !== operationId ||
-        (operation.card && !sameExplanationCard(operation.card, selection.card))) {
-        return failure(selection, question, 'citation')
+      // FL 返回的 operation_id 是落库键（explain:<card_key>:<客户端 id>），轮询必须用它；
+      // 客户端 id 只在受理请求里出现，拿它去查只会 404。
+      const deadline = now() + totalTimeoutMs
+      let attempts = 0
+      while (operation.status === 'pending') {
+        if (attempts >= MAX_POLLS || now() >= deadline) {
+          trackAnswer(requestSequence, 'timeout')
+          return failure(selection, question, 'timeout')
+        }
+        attempts += 1
+        await sleep(EXPLANATION_POLL_INTERVAL_MS)
+        operation = await api.getConversationExplanation(operation.operation_id)
+        if (!operationMatchesRequest(operation, selection.card, operationId)) {
+          trackAnswer(requestSequence, 'citation_invalid')
+          return failure(selection, question, 'citation_invalid')
+        }
       }
-      const quota = remainingQuota(operation)
-      if (requestSequence === sequence) {
-        if (quota !== undefined) remaining.value = quota
-        degraded.value = operation.degraded ?? operation.quota?.degraded ?? operation.status === 'failed'
+      if (operation.status === 'failed' || operation.status === 'stale') {
+        const kind = explanationFailureKind(operation.error_code)
+        trackAnswer(requestSequence, kind)
+        return failure(selection, question, kind)
       }
-      if (operation.status === 'failed') {
-        return failure(selection, question, explanationFailureKind(operation.reason_code ?? operation.error_code), operation)
+      const result = operation.explanation
+      // 成功必须有正文与非空依据；缺正文、缺依据或依据为空串都按引用失败处理，
+      // 不得让页面显示“依据已校验”。
+      if (!result || !result.template.trim() || result.evidence_ids.length === 0 ||
+        !result.evidence_ids.every((id) => typeof id === 'string' && id.trim().length > 0)) {
+        trackAnswer(requestSequence, 'citation_invalid')
+        return failure(selection, question, 'citation_invalid')
       }
-      const message = explanationText(operation)
-      if (!message) return failure(selection, question, 'citation', operation)
-      const action = explanationAction(operation)
+      trackAnswer(requestSequence, null)
       return {
         ...selection,
         question,
         state: 'success',
-        message,
-        ...(action ? { action } : {}),
-        evidenceIds: operation.explanation?.evidence_ids ?? operation.result?.evidence_ids ?? operation.evidence_ids ?? [],
-        degraded: operation.degraded ?? operation.quota?.degraded ?? false
+        message: result.template.trim(),
+        ...(result.action === 'recalculate' ? { action: 'recalculate' as const } : {}),
+        evidenceIds: [...result.evidence_ids],
+        degraded: false
       }
     } catch (cause) {
-      const kind = explanationFailureKind(undefined, valuationErrorStatus(cause))
-      if (requestSequence === sequence) {
-        degraded.value = kind !== 'forbidden'
-        if (kind === 'quota') remaining.value = 0
-      }
+      const kind = isTimeoutError(cause)
+        ? 'timeout'
+        : explanationFailureKind(undefined, valuationErrorStatus(cause))
+      trackAnswer(requestSequence, kind)
       return failure(selection, question, kind)
     }
   }
@@ -170,7 +195,7 @@ export function createValuationExplanationController(
     return promise
   }
 
-  return { selected, selectedKey, loading, remainingQuota: remaining, degraded, select, clear, ask }
+  return { selected, selectedKey, loading, degraded, select, clear, ask }
 }
 
 export function useValuationExplanations() {

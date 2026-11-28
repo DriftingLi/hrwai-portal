@@ -10,7 +10,7 @@
           <span class="message-author">估值助手 · {{ entry.answer.cardLabel }}</span>
           <p class="explanation-question">你的问题：{{ entry.answer.question }}</p>
           <p data-test="explanation-answer">{{ entry.answer.message }}</p>
-          <p class="explanation-meta">
+          <p class="explanation-meta" data-test="explanation-meta" :data-failure-kind="entry.answer.failureKind ?? ''">
             {{ entry.answer.state === 'failure' ? '固定说明' : '依据已校验' }}
             <span v-if="entry.answer.evidenceIds.length"> · {{ entry.answer.evidenceIds.length }} 条证据</span>
             <span v-if="entry.answer.degraded"> · 降级</span>

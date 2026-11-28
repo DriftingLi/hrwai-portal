@@ -69,6 +69,8 @@ export interface ValuationRequestInit {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   query?: Record<string, unknown>
   body?: unknown
+  /** 透传 ofetch 的毫秒超时；解释受理不能无限等待。 */
+  timeout?: number
 }
 
 /** 由 composable 绑定成「请求上下文感知」的取数器（SSR 转发 Cookie，客户端同源相对路径） */
@@ -116,8 +118,10 @@ export function valuationErrorStatus(error: unknown): number | null {
     status?: unknown
     statusCode?: unknown
     response?: { status?: unknown }
+    code?: unknown
   }
-  const candidates = [record.status, record.statusCode, record.response?.status]
+  // code 是本仓 ValuationApiError 携带的上游信封码（例如本地 DTO 校验的 422）。
+  const candidates = [record.status, record.statusCode, record.response?.status, record.code]
   for (const value of candidates) {
     if (typeof value === 'number' && Number.isFinite(value)) return value
   }
@@ -129,7 +133,9 @@ function unwrap<T>(payload: unknown): T {
   if (!wrapped || typeof wrapped !== 'object' || typeof wrapped.code !== 'number') {
     throw new ValuationApiError('估值接口响应格式错误')
   }
-  if (wrapped.code !== 200) {
+  // FL 的异步受理端点（建议 / 解释）返回 202 Accepted，信封 code 与 HTTP 状态一致；
+  // 2xx 都算成功，不能只认 200。
+  if (wrapped.code < 200 || wrapped.code >= 300) {
     throw new ValuationApiError(wrapped.message || '估值接口请求失败', wrapped.code)
   }
   return wrapped.data
@@ -384,50 +390,131 @@ export type ValuationExplanationCard =
 
 export interface ConversationExplanationRequest {
   operation_id: string
-  /** 当前草稿版本；草稿已过期或不在页面时传 0，解释仍绑定 card 的既有快照。 */
   draft_version: number
   card: ValuationExplanationCard
   question: string
 }
 
+export interface ExplanationFact {
+  id: string
+  label: string
+  value: unknown
+}
+
+/** FL conversation_explanation_dto.go 的 ValuationExplanationResult；正文只读 template。 */
+export interface UpstreamExplanationResult {
+  schema_version: number
+  action: 'explain' | 'recalculate'
+  template_key: string
+  template: string
+  facts: ExplanationFact[]
+  evidence_ids: string[]
+  formula_version: string
+  snapshot_id?: string
+  requires_user_action: boolean
+  card_version: number
+}
+
+/** FL ConversationOperation 的解释投影；FL 不返回 answer/content/text、reason_code 或额度。 */
 export interface UpstreamConversationExplanation {
-  id?: string
-  operation_id?: string
-  status: 'pending' | 'succeeded' | 'failed'
-  card?: ValuationExplanationCard
-  answer?: string
-  content?: string
-  text?: string
-  message?: string
-  explanation?: {
-    answer?: string
-    content?: string
-    text?: string
-    message?: string
-    action?: 'recalculate' | { type?: string }
-    evidence_ids?: string[]
-  }
-  result?: {
-    answer?: string
-    content?: string
-    text?: string
-    message?: string
-    action?: 'recalculate' | { type?: string }
-    evidence_ids?: string[]
-  }
-  action?: 'recalculate' | { type?: string }
-  next_action?: 'recalculate' | { type?: string }
-  evidence_ids?: string[]
-  reason_code?: string
+  id: string
+  kind: string
+  operation_id: string
+  draft_id: string
+  draft_version: number
+  base_version?: number
+  status: 'pending' | 'succeeded' | 'failed' | 'stale'
   error_code?: string
-  remaining_quota?: number
-  quota_remaining?: number
-  quota?: {
-    remaining?: number
-    remaining_quota?: number
-    degraded?: boolean
+  evaluation_id?: number
+  explanation?: UpstreamExplanationResult
+  card_kind?: string
+  card_key?: string
+  first_accepted_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+/** 解释受理与轮询的单次请求上限；POST 不能无限挂起在 pending 之前。 */
+export const EXPLANATION_REQUEST_TIMEOUT_MS = 10_000
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function parseExplanationFact(value: unknown): ExplanationFact | null {
+  if (!isRecord(value) || !isNonEmptyString(value.id) || typeof value.label !== 'string') return null
+  // 只投影契约字段；FL 之后新增的事实字段被忽略而不是原样透传。
+  return { id: value.id, label: value.label, value: value.value }
+}
+
+function parseExplanationResult(value: unknown): UpstreamExplanationResult | null {
+  if (!isRecord(value) || value.schema_version !== 1 ||
+    !['explain', 'recalculate'].includes(String(value.action)) ||
+    !isNonEmptyString(value.template_key) || !isNonEmptyString(value.template) ||
+    !Array.isArray(value.facts) || !Array.isArray(value.evidence_ids) ||
+    value.evidence_ids.length === 0 || value.evidence_ids.length > 16 ||
+    !value.evidence_ids.every(isNonEmptyString) ||
+    !isNonEmptyString(value.formula_version) || typeof value.requires_user_action !== 'boolean' ||
+    !Number.isInteger(value.card_version) || Number(value.card_version) < 1 ||
+    (value.snapshot_id !== undefined && typeof value.snapshot_id !== 'string')) return null
+  const facts = value.facts.map(parseExplanationFact)
+  if (facts.some((fact) => fact === null)) return null
+  return {
+    schema_version: 1,
+    action: value.action as UpstreamExplanationResult['action'],
+    template_key: value.template_key,
+    template: value.template,
+    facts: facts as ExplanationFact[],
+    evidence_ids: [...value.evidence_ids] as string[],
+    formula_version: value.formula_version,
+    ...(isNonEmptyString(value.snapshot_id) ? { snapshot_id: value.snapshot_id } : {}),
+    requires_user_action: value.requires_user_action,
+    card_version: value.card_version as number
   }
-  degraded?: boolean
+}
+
+/**
+ * 严格投影 FL 的 ConversationOperation 解释视图（conversation_operation_dto.go +
+ * conversation_explanation_dto.go）。旧版的顶层/嵌套 answer·content·text、reason_code、
+ * remaining_quota/quota、degraded 等别名一律不再兜底——缺真实字段就是格式错误，
+ * 由调用方映射成 citation_invalid，而不是把空答复当成功展示。
+ */
+function parseConversationExplanation(value: unknown): UpstreamConversationExplanation {
+  const invalid = () => new ValuationApiError('解释接口响应格式错误', 422)
+  if (!isRecord(value) || !isNonEmptyString(value.id) || !isNonEmptyString(value.operation_id) ||
+    value.kind !== 'explanation' || typeof value.draft_id !== 'string' ||
+    !Number.isInteger(value.draft_version) ||
+    (value.base_version !== undefined && !Number.isInteger(value.base_version)) ||
+    !['pending', 'succeeded', 'failed', 'stale'].includes(String(value.status)) ||
+    !isNonEmptyString(value.card_kind) || !isNonEmptyString(value.card_key) ||
+    (value.first_accepted_user_id !== null && typeof value.first_accepted_user_id !== 'number') ||
+    !isNonEmptyString(value.created_at) || !isNonEmptyString(value.updated_at)) throw invalid()
+  let explanation: UpstreamExplanationResult | undefined
+  if (value.explanation !== undefined) {
+    explanation = parseExplanationResult(value.explanation) ?? undefined
+    if (!explanation) throw invalid()
+  }
+  return {
+    id: value.id,
+    kind: value.kind,
+    operation_id: value.operation_id,
+    draft_id: value.draft_id,
+    draft_version: value.draft_version as number,
+    ...(value.base_version !== undefined ? { base_version: value.base_version as number } : {}),
+    status: value.status as UpstreamConversationExplanation['status'],
+    ...(typeof value.error_code === 'string' ? { error_code: value.error_code } : {}),
+    ...(typeof value.evaluation_id === 'number' ? { evaluation_id: value.evaluation_id } : {}),
+    ...(explanation ? { explanation } : {}),
+    card_kind: value.card_kind,
+    card_key: value.card_key,
+    first_accepted_user_id: value.first_accepted_user_id as number | null,
+    created_at: value.created_at,
+    updated_at: value.updated_at
+  }
 }
 
 // ===== 电池 RUL 评估 =====
@@ -525,17 +612,24 @@ export function batteryReportPath(id: number): string {
  * fetcher 由 composable 绑定（SSR 转发原始请求头 / 客户端同源），因此本文件无环境分支。
  */
 export function createValuationApi(fetcher: ValuationFetcher) {
-  const get = async <T>(path: string, query?: Record<string, unknown>): Promise<T> =>
+  const get = async <T>(path: string, query?: Record<string, unknown>, timeout?: number): Promise<T> =>
     unwrap<T>(
       await fetcher(path, {
         method: 'GET',
         // 空查询串不发：全空的级联参数要让后端走「缺省全量」分支
-        ...(query && Object.keys(query).length > 0 ? { query } : {})
+        ...(query && Object.keys(query).length > 0 ? { query } : {}),
+        ...(timeout ? { timeout } : {})
       })
     )
 
-  const post = async <T>(path: string, body?: unknown): Promise<T> =>
-    unwrap<T>(await fetcher(path, { method: 'POST', ...(body === undefined ? {} : { body }) }))
+  const post = async <T>(path: string, body?: unknown, timeout?: number): Promise<T> =>
+    unwrap<T>(
+      await fetcher(path, {
+        method: 'POST',
+        ...(body === undefined ? {} : { body }),
+        ...(timeout ? { timeout } : {})
+      })
+    )
 
   const patch = async <T>(path: string, body?: unknown): Promise<T> =>
     unwrap<T>(await fetcher(path, { method: 'PATCH', ...(body === undefined ? {} : { body }) }))
@@ -670,11 +764,17 @@ export function createValuationApi(fetcher: ValuationFetcher) {
       get<ConversationOperation>(
         `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
       ),
-    createConversationExplanation: (body: ConversationExplanationRequest) =>
-      post<UpstreamConversationExplanation>(`${VALUATION_API_PREFIX}/conversation/explanations`, body),
-    getConversationExplanation: (id: string) =>
-      get<UpstreamConversationExplanation>(
-        `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
+    createConversationExplanation: async (body: ConversationExplanationRequest) =>
+      parseConversationExplanation(
+        await post(`${VALUATION_API_PREFIX}/conversation/explanations`, body, EXPLANATION_REQUEST_TIMEOUT_MS)
+      ),
+    getConversationExplanation: async (id: string) =>
+      parseConversationExplanation(
+        await get(
+          `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`,
+          undefined,
+          EXPLANATION_REQUEST_TIMEOUT_MS
+        )
       ),
     async estimateTrial(request: TrialRequest): Promise<TrialResult> {
       try {

@@ -15,7 +15,6 @@
       <small>切换卡片后，新问题只引用新卡；已输出的答复保留原卡片标签。</small>
     </div>
 
-    <p v-if="remainingQuota !== null" class="explanation-quota" data-test="explanation-quota" aria-live="polite">剩余解释额度 {{ remainingQuota }} 次</p>
     <p v-if="degraded" class="explanation-degraded" data-test="explanation-degraded" role="status">本次为降级答复；卡片与报告仍按原权限使用。</p>
 
     <form class="composer" data-test="message-form" @submit.prevent="emit('submit')">
@@ -42,7 +41,6 @@ defineProps<{
   selection: ExplanationSelection | null
   question: string
   loading: boolean
-  remainingQuota: number | null
   degraded: boolean
 }>()
 
@@ -77,7 +75,6 @@ const emit = defineEmits<{
   font-size: var(--text-xl);
 }
 .explanation-hint,
-.explanation-quota,
 .explanation-degraded {
   margin: 0;
   color: var(--color-text-secondary);
@@ -103,7 +100,6 @@ const emit = defineEmits<{
   font-size: var(--text-xs);
   line-height: var(--leading-relaxed);
 }
-.explanation-quota,
 .explanation-degraded {
   font-size: var(--text-xs);
 }

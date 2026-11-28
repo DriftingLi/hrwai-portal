@@ -6,6 +6,7 @@ import {
   batteryTypeLabels,
   createValuationApi,
   evaluationReportPath,
+  EXPLANATION_REQUEST_TIMEOUT_MS,
   valuationErrorMessage,
   valuationErrorStatus,
   type ValuationFetcher,
@@ -260,10 +261,29 @@ describe('对话草稿端点路径', () => {
 
   it('解释操作提交卡片快照与草稿版本，并按 operation_id 查询', async () => {
     const operation = {
-      id: 'explanation-1',
-      operation_id: 'explanation-1',
+      id: 'explain:formal-1:explanation-1',
+      kind: 'explanation',
+      operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '',
+      draft_version: 3,
       status: 'succeeded',
-      answer: '该卡采用 4,800 小时快照。'
+      card_kind: 'formal',
+      card_key: 'formal-1',
+      first_accepted_user_id: null,
+      created_at: '2026-11-28T00:00:00Z',
+      updated_at: '2026-11-28T00:00:01Z',
+      explanation: {
+        schema_version: 1,
+        action: 'explain',
+        template_key: 'result_snapshot',
+        template: '该卡采用 4,800 小时快照。',
+        facts: [{ id: 'result.estimated_value', label: '预估残值', value: 33600 }],
+        evidence_ids: ['result.estimated_value'],
+        formula_version: 'valuation-v2',
+        snapshot_id: '88',
+        requires_user_action: false,
+        card_version: 1
+      }
     }
     const { api, calls } = setup(() => wrapped(operation))
     const request = {
@@ -274,18 +294,70 @@ describe('对话草稿端点路径', () => {
     }
 
     await expect(api.createConversationExplanation(request)).resolves.toEqual(operation)
-    await expect(api.getConversationExplanation('explanation/1')).resolves.toEqual(operation)
+    await expect(api.getConversationExplanation('explain:formal-1:explanation-1')).resolves.toEqual(operation)
 
     expect(calls).toEqual([
       {
         path: '/api/valuation/conversation/explanations',
-        init: { method: 'POST', body: request }
+        init: { method: 'POST', body: request, timeout: EXPLANATION_REQUEST_TIMEOUT_MS }
       },
       {
-        path: '/api/valuation/conversation/operations/explanation%2F1',
-        init: { method: 'GET' }
+        path: '/api/valuation/conversation/operations/explain%3Aformal-1%3Aexplanation-1',
+        init: { method: 'GET', timeout: EXPLANATION_REQUEST_TIMEOUT_MS }
       }
     ])
+  })
+
+  it.each([
+    ['顶层 answer/remaining_quota 旧应答', {
+      id: 'explanation-1', operation_id: 'explanation-1', status: 'succeeded',
+      answer: '旧答复', remaining_quota: 6
+    }],
+    ['嵌套 result/action 旧应答', {
+      id: 'explanation-1', operation_id: 'explanation-1', status: 'succeeded',
+      result: { answer: '嵌套答复', action: { type: 'recalculate' }, evidence_ids: ['ev-1'] },
+      quota_remaining: 3
+    }],
+    ['真实 DTO 但证据为空', {
+      id: 'explain:formal-1:explanation-1', kind: 'explanation', operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '', draft_version: 3, status: 'succeeded', card_kind: 'formal', card_key: 'formal-1',
+      first_accepted_user_id: null, created_at: '2026-11-28T00:00:00Z', updated_at: '2026-11-28T00:00:01Z',
+      explanation: {
+        schema_version: 1, action: 'explain', template_key: 'result_snapshot', template: '答复',
+        facts: [], evidence_ids: [], formula_version: 'valuation-v2', requires_user_action: false, card_version: 1
+      }
+    }]
+  ])('%s 在数据层按格式错误拒绝', async (_label, payload) => {
+    const { api } = setup(() => wrapped(payload))
+    await expect(api.createConversationExplanation({
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal', operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么？'
+    })).rejects.toMatchObject({ name: 'ValuationApiError', code: 422 })
+  })
+
+  it('解释受理的 202 Accepted 信封按成功解包', async () => {
+    const operation = {
+      id: 'explain:formal-1:explanation-1',
+      kind: 'explanation',
+      operation_id: 'explain:formal-1:explanation-1',
+      draft_id: '',
+      draft_version: 3,
+      status: 'pending',
+      card_kind: 'formal',
+      card_key: 'formal-1',
+      first_accepted_user_id: null,
+      created_at: '2026-11-28T00:00:00Z',
+      updated_at: '2026-11-28T00:00:01Z'
+    }
+    const { api } = setup(() => ({ code: 202, message: 'accepted', data: operation }))
+    await expect(api.createConversationExplanation({
+      operation_id: 'explanation-1',
+      draft_version: 3,
+      card: { kind: 'formal', operation_id: 'formal-1', evaluation_id: 88 },
+      question: '为什么？'
+    })).resolves.toMatchObject({ status: 'pending', card_key: 'formal-1' })
   })
 
   it('操作提交和查询保留同一 operation_id，并解包正式结果', async () => {
@@ -489,6 +561,7 @@ describe('错误与下载地址', () => {
     error.statusCode = 401
     expect(valuationErrorStatus(error)).toBe(401)
     expect(valuationErrorStatus({ response: { status: 403 } })).toBe(403)
+    expect(valuationErrorStatus({ code: 422 })).toBe(422)
     expect(valuationErrorStatus(null)).toBeNull()
     expect(valuationErrorStatus({ status: 'oops' })).toBeNull()
   })
