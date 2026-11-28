@@ -1,3 +1,5 @@
+import type { ConversationDraft, ConversationOperation, DraftFields } from '~/utils/valuationConversation'
+
 // 残值评估数据访问层（票 #32）：页面组件不直接 $fetch（与 api/featured.ts 同一个约定）。
 //
 // 两个前缀，一条凭证边界：
@@ -16,7 +18,7 @@ export interface Wrapped<T> {
 }
 
 export interface ValuationRequestInit {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   query?: Record<string, unknown>
   body?: unknown
 }
@@ -336,6 +338,12 @@ export function createValuationApi(fetcher: ValuationFetcher) {
   const post = async <T>(path: string, body?: unknown): Promise<T> =>
     unwrap<T>(await fetcher(path, { method: 'POST', ...(body === undefined ? {} : { body }) }))
 
+  const patch = async <T>(path: string, body?: unknown): Promise<T> =>
+    unwrap<T>(await fetcher(path, { method: 'PATCH', ...(body === undefined ? {} : { body }) }))
+
+  const remove = async <T>(path: string): Promise<T> =>
+    unwrap<T>(await fetcher(path, { method: 'DELETE' }))
+
   return {
     // ===== 会话 =====
     async getSession(): Promise<ValuationSessionResponse> {
@@ -437,6 +445,38 @@ export function createValuationApi(fetcher: ValuationFetcher) {
     },
 
     // ===== 整机评估 =====
+    createConversationDraft: (body: { source?: 'manual' | 'conversation' } = {}) =>
+      post<ConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts`, body),
+    getConversationDraft: (id: string) =>
+      get<ConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`),
+    updateConversationDraft: (
+      id: string,
+      body: { draft_version: number; fields: Partial<DraftFields>; evidence?: string }
+    ) =>
+      patch<ConversationDraft>(
+        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`,
+        body
+      ),
+    undoConversationDraft: (id: string, body: { draft_version: number }) =>
+      post<ConversationDraft>(
+        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}/undo`,
+        body
+      ),
+    deleteConversationDraft: (id: string) =>
+      remove<{ deleted: boolean }>(
+        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`
+      ),
+    createConversationOperation: (body: {
+      operation_id: string
+      draft_id: string
+      draft_version: number
+      request: EvaluationRequest
+    }) => post<ConversationOperation>(`${VALUATION_API_PREFIX}/conversation/operations`, body),
+    getConversationOperation: (id: string) =>
+      get<ConversationOperation>(
+        `${VALUATION_API_PREFIX}/conversation/operations/${encodeURIComponent(id)}`
+      ),
+
     createEvaluation: (request: EvaluationRequest) =>
       post<EvaluationRecord>(`${VALUATION_API_PREFIX}/evaluations`, request),
     listEvaluations: (query: EvaluationListQuery = {}) =>

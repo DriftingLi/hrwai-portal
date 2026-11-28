@@ -153,7 +153,7 @@
             >
               <option :value="undefined" disabled>请选择</option>
               <option v-for="item in mastHeightOptions" :key="item.id" :value="item.value_mm">
-                {{ item.value_mm === NONE_MAST_HEIGHT ? '无' : `${item.value_mm} mm` }}
+                {{ item.value_mm === NONE_MAST_HEIGHT_VALUE ? '无' : `${item.value_mm} mm` }}
               </option>
             </select>
             <span class="select-icon" aria-hidden="true">
@@ -359,18 +359,16 @@
 // 单卡 + 六行「2/3/3/2/2/3」栅格、自定义渐变开关、大号车况 pill、底部「重置 + 提交评估」。
 // 刻意保留的旧行为：出厂年份是**级联锁定下拉**（下限取原价表 earliest_factory_year）、
 // 成交年份不进界面（恒取当前年，随 payload 提交）、系列可填「其它」、门架可填「无」。
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import type { Brand, ConditionRating, EvaluationRecord, EvaluationRequest } from '~/api/valuation'
 import { valuationErrorMessage } from '~/api/valuation'
 import { useValuationApi } from '~/composables/useValuationApi'
+import {
+  NONE_MAST_HEIGHT_VALUE,
+  resetDownstreamFormFields,
+  useWholeMachineDictionaries
+} from '~/composables/useWholeMachineDictionaries'
 import { validateEvaluationForm } from '~/utils/valuationValidator'
-
-/** 系列「其它」：前端哨兵值，级联查询时按「没有系列」处理 */
-const OTHER_SERIES_VALUE = '其它'
-/** 门架类型「无」 */
-const NONE_VALUE = '无'
-/** 门架高度「无」（后端接受 0） */
-const NONE_MAST_HEIGHT = 0
 
 const props = defineProps<{
   brands: Brand[]
@@ -428,41 +426,26 @@ function initialState(): FormState {
 
 const form = reactive<FormState>(initialState())
 
-const vehicleTypes = ref<string[]>([])
-const seriesList = ref<Array<{ id: number; name: string }>>([])
-const tonnages = ref<number[]>([])
-const configTypes = ref<Array<{ id: number; name: string }>>([])
-const mastTypes = ref<Array<{ id: number; name: string }>>([])
-const mastHeights = ref<Array<{ id: number; value_mm: number }>>([])
-const cities = ref<string[]>([])
-const earliestFactoryYear = ref(1980)
-const loading = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
 
-// ===== 「其它 / 无」选项（前端常量，附在下拉末尾） =====
-const seriesOptions = computed(() => {
-  if (seriesList.value.some((item) => item.name === OTHER_SERIES_VALUE)) return seriesList.value
-  return [...seriesList.value, { id: -1, name: OTHER_SERIES_VALUE }]
-})
-const mastTypeOptions = computed(() => {
-  if (mastTypes.value.some((item) => item.name === NONE_VALUE)) return mastTypes.value
-  return [...mastTypes.value, { id: -1, name: NONE_VALUE }]
-})
-const mastHeightOptions = computed(() => {
-  if (mastHeights.value.some((item) => item.value_mm === NONE_MAST_HEIGHT)) return mastHeights.value
-  return [...mastHeights.value, { id: -1, value_mm: NONE_MAST_HEIGHT }]
-})
+const {
+  vehicleTypes,
+  seriesList,
+  seriesOptions,
+  tonnages,
+  configTypes,
+  mastTypes,
+  mastTypeOptions,
+  mastHeights,
+  mastHeightOptions,
+  cities,
+  earliestFactoryYear,
+  factoryYearOptions,
+  loading,
+  clearOptions
+} = useWholeMachineDictionaries(api, form, (key) => resetDownstreamFormFields(form, key))
 
-const currentYear = new Date().getFullYear()
-/** 出厂年份选项：下限由原价表级联决定，最新年份排在前 */
-const factoryYearOptions = computed(() => {
-  const years: number[] = []
-  for (let year = earliestFactoryYear.value; year <= currentYear; year++) years.push(year)
-  return years.reverse()
-})
-
-/** 车况评级按 A→E 排序展示（后端返回顺序不作为契约） */
 const sortedConditionRatings = computed(() =>
   [...props.conditionRatings].sort((a, b) => a.rating.localeCompare(b.rating))
 )
@@ -477,196 +460,6 @@ const RATING_DESCRIPTION: Record<string, string> = {
 function ratingDescription(rating: string): string {
   return RATING_DESCRIPTION[rating] ?? ''
 }
-
-// ===== 级联加载 =====
-// 版本号守卫：级联是异步的，用户在 A→B 之间快速改选时，先发的请求后到会把新结果覆盖掉
-let cascadeVersion = 0
-async function load<T>(loader: () => Promise<T>, apply: (value: T) => void) {
-  const version = ++cascadeVersion
-  loading.value = true
-  try {
-    const value = await loader()
-    if (version === cascadeVersion) apply(value)
-  } catch {
-    // 字典查询失败不阻断填表：保持空选项，页面顶部已有「字典不可用」提示
-  } finally {
-    if (version === cascadeVersion) loading.value = false
-  }
-}
-
-/** 系列在级联查询里的口径：「其它」等于没有系列 */
-function seriesParam(): string | undefined {
-  return form.series === OTHER_SERIES_VALUE ? undefined : form.series
-}
-
-watch(
-  () => form.brand,
-  async () => {
-    form.vehicle_type = undefined
-    form.series = undefined
-    form.tonnage = undefined
-    form.config_type = undefined
-    form.mast_type = undefined
-    form.mast_height_mm = undefined
-    form.factory_year = undefined
-    vehicleTypes.value = []
-    seriesList.value = []
-    tonnages.value = []
-    configTypes.value = []
-    mastTypes.value = []
-    mastHeights.value = []
-    if (!form.brand) return
-    await load(
-      () => api.listVehicleTypes(form.brand),
-      (list) => (vehicleTypes.value = list.map((item) => item.name))
-    )
-  }
-)
-
-watch(
-  () => form.vehicle_type,
-  async () => {
-    form.series = undefined
-    form.tonnage = undefined
-    form.config_type = undefined
-    form.mast_type = undefined
-    form.mast_height_mm = undefined
-    form.factory_year = undefined
-    seriesList.value = []
-    tonnages.value = []
-    configTypes.value = []
-    mastTypes.value = []
-    mastHeights.value = []
-    if (!form.brand || !form.vehicle_type) return
-    await load(
-      () => api.listSeries(form.brand, form.vehicle_type),
-      (list) => (seriesList.value = list.map((item) => ({ id: item.id, name: item.name })))
-    )
-  }
-)
-
-watch(
-  () => form.series,
-  async () => {
-    form.tonnage = undefined
-    form.config_type = undefined
-    form.mast_type = undefined
-    form.mast_height_mm = undefined
-    form.factory_year = undefined
-    tonnages.value = []
-    configTypes.value = []
-    mastTypes.value = []
-    mastHeights.value = []
-    if (!form.brand || !form.vehicle_type || !form.series) return
-    await load(
-      () => api.listTonnages(form.brand, form.vehicle_type, seriesParam()),
-      (list) => (tonnages.value = list.map((item) => item.value))
-    )
-  }
-)
-
-watch(
-  () => form.tonnage,
-  async () => {
-    form.config_type = undefined
-    form.mast_type = undefined
-    form.mast_height_mm = undefined
-    form.factory_year = undefined
-    configTypes.value = []
-    mastTypes.value = []
-    mastHeights.value = []
-    earliestFactoryYear.value = 1980
-    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null) return
-    await load(
-      () =>
-        Promise.all([
-          api.listConfigTypes({
-            brand: form.brand,
-            vehicleType: form.vehicle_type,
-            series: seriesParam(),
-            tonnage: form.tonnage
-          }),
-          api.getEarliestFactoryYear({
-            brand: form.brand,
-            vehicleType: form.vehicle_type,
-            series: seriesParam(),
-            tonnage: form.tonnage
-          })
-        ]),
-      ([configs, year]) => {
-        configTypes.value = configs.map((item) => ({ id: item.id, name: item.name }))
-        earliestFactoryYear.value = year
-      }
-    )
-  }
-)
-
-watch(
-  () => form.config_type,
-  async () => {
-    form.mast_type = undefined
-    form.mast_height_mm = undefined
-    mastTypes.value = []
-    mastHeights.value = []
-    if (!form.brand || !form.vehicle_type || !form.series || form.tonnage == null || !form.config_type) {
-      return
-    }
-    await load(
-      () =>
-        api.listMastTypes({
-          brand: form.brand,
-          vehicleType: form.vehicle_type,
-          series: seriesParam(),
-          tonnage: form.tonnage,
-          configType: form.config_type
-        }),
-      (list) => (mastTypes.value = list.map((item) => ({ id: item.id, name: item.name })))
-    )
-  }
-)
-
-watch(
-  () => form.mast_type,
-  async () => {
-    form.mast_height_mm = undefined
-    mastHeights.value = []
-    if (
-      !form.brand ||
-      !form.vehicle_type ||
-      !form.series ||
-      form.tonnage == null ||
-      !form.config_type ||
-      !form.mast_type
-    ) {
-      return
-    }
-    await load(
-      () =>
-        api.listMastHeights({
-          brand: form.brand,
-          vehicleType: form.vehicle_type,
-          series: seriesParam(),
-          tonnage: form.tonnage,
-          configType: form.config_type,
-          mastType: form.mast_type
-        }),
-      (list) => (mastHeights.value = list.map((item) => ({ id: item.id, value_mm: item.value_mm })))
-    )
-  }
-)
-
-watch(
-  () => form.province,
-  async () => {
-    form.city = undefined
-    cities.value = []
-    if (!form.province) return
-    await load(
-      () => api.listCities(form.province as string),
-      (list) => (cities.value = list)
-    )
-  }
-)
 
 // ===== 提交 =====
 /**
@@ -733,14 +526,7 @@ async function submit() {
 
 function reset() {
   Object.assign(form, initialState())
-  vehicleTypes.value = []
-  seriesList.value = []
-  tonnages.value = []
-  configTypes.value = []
-  mastTypes.value = []
-  mastHeights.value = []
-  cities.value = []
-  earliestFactoryYear.value = 1980
+  clearOptions()
   errorMessage.value = ''
 }
 </script>

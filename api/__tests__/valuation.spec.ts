@@ -9,7 +9,8 @@ import {
   valuationErrorMessage,
   valuationErrorStatus,
   type ValuationFetcher,
-  type ValuationRequestInit
+  type ValuationRequestInit,
+  type EvaluationRequest
 } from '../valuation'
 
 const wrapped = <T>(data: T) => ({ code: 200, message: 'success', data })
@@ -181,6 +182,86 @@ describe('整机评估端点', () => {
     const detail = await api.getEvaluation(5)
     expect(calls[0]).toEqual({ path: '/api/valuation/evaluations/5', init: { method: 'GET' } })
     expect(detail.id).toBe(5)
+  })
+})
+
+describe('对话草稿与操作端点', () => {
+  const draft = {
+    id: 'draft-1',
+    draft_version: 2,
+    updated_at: '2026-11-20T10:00:00Z',
+    fields: { usage_hours: { status: 'value', value: 0 } }
+  }
+
+  it('草稿创建、CAS 更新、撤回与删除都走约定端点', async () => {
+    const { api, calls } = setup(() => wrapped(draft))
+    await api.createConversationDraft({ source: 'manual' })
+    await api.getConversationDraft('draft-1')
+    await api.updateConversationDraft('draft-1', {
+      draft_version: 2,
+      fields: { usage_hours: { status: 'value', value: 0 } }
+    })
+    await api.undoConversationDraft('draft-1', { draft_version: 2 })
+    await api.deleteConversationDraft('draft-1')
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/drafts',
+        init: { method: 'POST', body: { source: 'manual' } }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: { method: 'GET' }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: {
+          method: 'PATCH',
+          body: {
+            draft_version: 2,
+            fields: { usage_hours: { status: 'value', value: 0 } }
+          }
+        }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1/undo',
+        init: { method: 'POST', body: { draft_version: 2 } }
+      },
+      {
+        path: '/api/valuation/conversation/drafts/draft-1',
+        init: { method: 'DELETE' }
+      }
+    ])
+  })
+
+  it('操作提交和查询保留同一 operation_id，并解包正式结果', async () => {
+    const operation = {
+      id: 'operation-1',
+      status: 'succeeded',
+      evaluation: { id: 88, usage_hours: 0 }
+    }
+    const { api, calls } = setup(() => wrapped(operation))
+    const request = {
+      operation_id: 'operation-1',
+      draft_id: 'draft-1',
+      draft_version: 2,
+      request: { brand: '合力', usage_hours: 0 } as EvaluationRequest
+    }
+    const created = await api.createConversationOperation(request)
+    const polled = await api.getConversationOperation('operation-1')
+
+    expect(calls).toEqual([
+      {
+        path: '/api/valuation/conversation/operations',
+        init: { method: 'POST', body: request }
+      },
+      {
+        path: '/api/valuation/conversation/operations/operation-1',
+        init: { method: 'GET' }
+      }
+    ])
+    expect(created.evaluation?.id).toBe(88)
+    expect(polled).toEqual(operation)
   })
 })
 

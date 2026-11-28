@@ -9,7 +9,7 @@ import { createValuationApi, type ValuationFetcher } from '~/api/valuation'
 // 保留 method/query/body 的静态约束，只放弃「按路由推导」这一层。
 type PortalFetch = (
   path: string,
-  opts?: { method: 'get' | 'post', query?: Record<string, unknown>, body?: unknown }
+  opts?: { method: 'get' | 'post' | 'patch' | 'delete', query?: Record<string, unknown>, body?: unknown }
 ) => Promise<unknown>
 
 export function useValuationApi() {
@@ -18,7 +18,7 @@ export function useValuationApi() {
   const fetcher: ValuationFetcher = (path, init = {}) =>
     requestFetch(path, {
       // 数据层按 HTTP 惯例用大写 method，这里映射成 $fetch 接受的小写字面量。
-      method: init.method === 'POST' ? 'post' : 'get',
+      method: init.method === 'POST' ? 'post' : init.method === 'PATCH' ? 'patch' : init.method === 'DELETE' ? 'delete' : 'get',
       ...(init.query ? { query: init.query } : {}),
       ...(init.body !== undefined ? { body: init.body } : {})
     })

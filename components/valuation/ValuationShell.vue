@@ -6,6 +6,9 @@
         <NuxtLink to="/valuation" class="subnav-link" :class="{ active: active === 'whole' }">
           整机残值评估
         </NuxtLink>
+        <NuxtLink to="/valuation/conversation" class="subnav-link" :class="{ active: active === 'conversation' }">
+          对话式评估
+        </NuxtLink>
         <NuxtLink to="/valuation/battery" class="subnav-link" :class="{ active: active === 'battery' }">
           电池 RUL 评估
         </NuxtLink>
@@ -44,7 +47,7 @@ const props = withDefaults(
     title: string
     subtitle?: string
     /** 当前子导航项（whole / battery / history）；不给则都不高亮 */
-    active?: 'whole' | 'battery' | 'history' | ''
+    active?: 'whole' | 'conversation' | 'battery' | 'history' | ''
   }>(),
   { subtitle: '', active: '' }
 )
