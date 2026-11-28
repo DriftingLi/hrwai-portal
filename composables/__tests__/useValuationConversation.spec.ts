@@ -6,6 +6,8 @@ import {
   type DraftFields
 } from '~/utils/valuationConversation'
 import { createValuationConversationController } from '../useValuationConversation'
+import { normalizeConversationDraft } from '~/utils/valuationConversation'
+import type { UpstreamConversationDraft } from '~/api/valuation'
 import { validateEvaluationForm } from '~/utils/valuationValidator'
 import { draftValues } from '~/utils/valuationConversation'
 
@@ -22,38 +24,52 @@ const completeValues: EvaluationRequest = {
   sale_year: currentYear,
   usage_hours: 0,
   original_paint: false,
-  province: '江苏省',
-  city: '苏州市',
+  province: '江苏',
+  city: '苏州',
   has_license_plate: false,
   has_registration_certificate: false,
   has_maintenance_records: false,
   condition_rating: 'B'
 }
 
-function draft(version = 1, fields: DraftFields = createDraftFields()): ConversationDraft {
-  return { id: 'draft-1', draft_version: version, updated_at: new Date().toISOString(), fields }
+function upstreamDraft(version: number, fields: DraftFields = createDraftFields(), nowMs = Date.now()) {
+  const wireFields = Object.fromEntries(Object.entries(fields).map(([key, field]) => {
+    const common = { ...(field.evidence ? { evidence: field.evidence } : {}), ...(field.source ? { source: field.source } : {}) }
+    if (field.status === 'range') return [key, { state: 'range', range: { min: field.min, max: field.max }, ...common }]
+    if (field.status === 'candidate') return [key, { state: 'candidate', candidates: field.candidates?.map((value) => ({ value })), ...common }]
+    return [key, { state: field.status, ...(field.status === 'value' ? { value: field.value } : {}), ...common }]
+  }))
+  return {
+    id: 'draft-1', version, status: 'editing' as const,
+    updated_at: new Date(nowMs).toISOString(), expires_at: new Date(nowMs + 30 * 60 * 1000).toISOString(),
+    fields: wireFields, supplemental: {}, can_undo: version > 1, can_submit: false
+  }
 }
 
-function setup(options: { restored?: ConversationDraft; fields?: DraftFields; now?: () => number } = {}) {
-  let version = options.restored?.draft_version ?? 0
-  let fields = options.fields ?? options.restored?.fields ?? createDraftFields()
+function draft(version = 1, fields: DraftFields = createDraftFields()): ConversationDraft {
+  return normalizeConversationDraft(upstreamDraft(version, fields))
+}
+
+function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFields; now?: () => number } = {}) {
+  let version = options.restored?.version ?? 0
+  let fields = options.fields ?? createDraftFields()
   const api = {
     createConversationDraft: vi.fn(async () => {
       version = 1
-      return draft(version, fields)
+      return upstreamDraft(version, fields, options.now?.())
     }),
-    getConversationDraft: vi.fn(async () => draft(version, fields)),
-    updateConversationDraft: vi.fn(async (_id: string, body: { draft_version: number; fields: Partial<DraftFields> }) => {
-      if (body.draft_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
+    getConversationDraft: vi.fn(async () => upstreamDraft(version, fields, options.now?.())),
+    updateConversationDraft: vi.fn(async (_id: string, body: { base_version: number; fields: Partial<DraftFields> }) => {
+      if (body.base_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
       version += 1
       fields = { ...fields, ...body.fields }
-      return draft(version, fields)
+      return upstreamDraft(version, fields, options.now?.())
     }),
-    undoConversationDraft: vi.fn(async (_id: string, body: { draft_version: number }) => {
-      if (body.draft_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
+    undoConversationDraft: vi.fn(async (_id: string, body: { base_version: number }) => {
+      if (body.base_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
       version += 1
       fields = { ...fields, usage_hours: { status: 'value', value: 4800 } }
-      return draft(version, fields)
+      return { ...upstreamDraft(version, fields, options.now?.()), can_undo: false }
     }),
     deleteConversationDraft: vi.fn(async () => ({ deleted: true })),
     createConversationOperation: vi.fn(async (body: { operation_id: string; request: EvaluationRequest }) => ({
@@ -84,14 +100,35 @@ function setup(options: { restored?: ConversationDraft; fields?: DraftFields; no
 
 describe('对话草稿控制器', () => {
   it('同一标签刷新按 id 恢复草稿，不创建第二份', async () => {
-    const { api, controller, storage } = setup({ restored: draft(4) })
+    const { api, controller, storage } = setup({ restored: upstreamDraft(4) })
     storage.set('hrwai:valuation-conversation:draft:v1', JSON.stringify({
       id: 'draft-1', updated_at: new Date().toISOString()
     }))
     await controller.restore()
     expect(api.getConversationDraft).toHaveBeenCalledWith('draft-1')
     expect(api.createConversationDraft).not.toHaveBeenCalled()
-    expect(controller.draft.value?.draft_version).toBe(4)
+    expect(controller.draft.value?.version).toBe(4)
+    expect(controller.canUndo.value).toBe(true)
+  })
+
+  it('恢复后的可撤回状态只来自服务端 can_undo，不凭本地修改历史猜测', async () => {
+    const { controller } = setup({ restored: { ...upstreamDraft(4), can_undo: false } })
+    await controller.restore()
+    expect(controller.canUndo.value).toBe(false)
+  })
+
+  it('活跃操作通过空字段 PATCH 续期服务端 TTL，并按 CAS 生成新版本', async () => {
+    let time = Date.now()
+    const { api, controller } = setup({ now: () => time })
+    await controller.restore()
+    time += 26 * 60 * 1000
+    const serverExpiry = controller.draft.value!.expires_at
+    expect(api.updateConversationDraft).not.toHaveBeenCalled()
+    await controller.touch()
+    expect(api.updateConversationDraft).toHaveBeenCalledWith('draft-1', { base_version: 1, fields: {} })
+    expect(controller.draft.value?.version).toBe(2)
+    expect(Date.parse(controller.draft.value!.expires_at)).toBeGreaterThan(Date.parse(serverExpiry))
+    expect(controller.draft.value?.fields.usage_hours.status).toBe('missing')
   })
 
   it('快速修改串行使用 CAS 版本，撤回调用独立 undo 端点', async () => {
@@ -101,13 +138,14 @@ describe('对话草稿控制器', () => {
       controller.setField('usage_hours', 0, '铭牌 0 小时'),
       controller.setField('has_registration_certificate', false, '用户明确说明没有')
     ])
-    expect(api.updateConversationDraft.mock.calls.map((call) => call[1].draft_version)).toEqual([1, 2])
+    expect(api.updateConversationDraft.mock.calls.map((call) => call[1].base_version)).toEqual([1, 2])
     expect(controller.draft.value?.fields.usage_hours).toMatchObject({ status: 'value', value: 0 })
     expect(controller.draft.value?.fields.has_registration_certificate).toMatchObject({ status: 'value', value: false })
 
     await controller.undo()
-    expect(api.undoConversationDraft).toHaveBeenCalledWith('draft-1', { draft_version: 3 })
-    expect(controller.draft.value?.draft_version).toBe(4)
+    expect(api.undoConversationDraft).toHaveBeenCalledWith('draft-1', { base_version: 3 })
+    expect(controller.draft.value?.version).toBe(4)
+    expect(controller.canUndo.value).toBe(false)
   })
 
   it('未核对完整版本不能确认；0 与 false 的完整版本可以确认', async () => {
@@ -121,7 +159,7 @@ describe('对话草稿控制器', () => {
     }
     expect(controller.complete.value).toBe(true)
     expect(validateEvaluationForm(draftValues(controller.draft.value!.fields))).toEqual({ valid: true })
-    await expect(controller.confirm(controller.draft.value!.draft_version - 1)).rejects.toThrow('草稿版本已变化')
+    await expect(controller.confirm(controller.draft.value!.version - 1)).rejects.toThrow('草稿版本已变化')
     const record = await controller.confirm()
     expect(record.id).toBe(88)
     expect(api.createConversationOperation.mock.calls[0]?.[0]).toMatchObject({

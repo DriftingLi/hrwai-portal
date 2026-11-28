@@ -2,10 +2,12 @@ import { computed, ref } from 'vue'
 import {
   valuationErrorStatus,
   type EvaluationRecord,
+  type UpstreamConversationDraft,
   type ValuationApi
 } from '~/api/valuation'
 import {
   DRAFT_IDLE_TIMEOUT_MS,
+  DRAFT_SERVER_TOUCH_WINDOW_MS,
   clearDraftSession,
   draftToEvaluationRequest,
   normalizeConversationDraft,
@@ -15,7 +17,6 @@ import {
   writeDraftSession,
   type ConversationDraft,
   type ConversationOperation,
-  type DraftField,
   type DraftFieldKey,
   type DraftFields,
   type DraftSessionSnapshot
@@ -54,7 +55,6 @@ export function createValuationConversationController(api: ConversationApi, opti
   const saving = ref(false)
   const confirming = ref(false)
   const error = ref('')
-  const canUndo = ref(false)
   const storage = options.storage ?? browserStorage()
   const now = options.now ?? Date.now
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
@@ -64,29 +64,29 @@ export function createValuationConversationController(api: ConversationApi, opti
   let completedRecord: EvaluationRecord | null = null
   let confirmationPromise: Promise<EvaluationRecord> | null = null
   let mutationQueue: Promise<unknown> = Promise.resolve()
+  let touchPromise: Promise<boolean> | null = null
   let pendingMutations = 0
 
   const complete = computed(() => Boolean(draft.value && draftToEvaluationRequest(draft.value)))
-  const expired = computed(() => now() - lastActivity >= DRAFT_IDLE_TIMEOUT_MS)
+  // 本地时钟只负责展示与调度；能否继续使用一律以服务端 expires_at 为准。
+  const expired = computed(() => Boolean(draft.value && Date.parse(draft.value.expires_at) <= now()))
+  const canUndo = computed(() => draft.value?.can_undo === true && !expired.value)
 
   function persist() {
     if (!storage || !draft.value) return
     const snapshot: DraftSessionSnapshot = {
       id: draft.value.id,
+      expires_at: draft.value.expires_at,
       ...(operationId ? { operation_id: operationId } : {}),
       updated_at: new Date(lastActivity).toISOString()
     }
     writeDraftSession(storage, snapshot)
   }
 
-  function touch() {
+  function applyDraft(value: UpstreamConversationDraft) {
+    draft.value = normalizeConversationDraft(value)
     lastActivity = now()
     persist()
-  }
-
-  function applyDraft(value: ConversationDraft) {
-    draft.value = normalizeConversationDraft(value)
-    touch()
   }
 
   function clearLocal() {
@@ -94,7 +94,6 @@ export function createValuationConversationController(api: ConversationApi, opti
     operationId = ''
     completedRecord = null
     confirmationPromise = null
-    canUndo.value = false
     if (storage) clearDraftSession(storage)
   }
 
@@ -104,7 +103,12 @@ export function createValuationConversationController(api: ConversationApi, opti
     error.value = ''
     try {
       const snapshot = storage ? readDraftSession(storage, now()) : null
-      if (snapshot && now() - Date.parse(snapshot.updated_at) < DRAFT_IDLE_TIMEOUT_MS) {
+      const snapshotExpires = snapshot
+        ? snapshot.expires_at
+          ? Date.parse(snapshot.expires_at)
+          : Date.parse(snapshot.updated_at) + DRAFT_IDLE_TIMEOUT_MS
+        : 0
+      if (snapshot && snapshotExpires > now()) {
         operationId = snapshot.operation_id ?? ''
         try {
           applyDraft(await api.getConversationDraft(snapshot.id))
@@ -114,7 +118,7 @@ export function createValuationConversationController(api: ConversationApi, opti
           if (storage) clearDraftSession(storage)
         }
       }
-      applyDraft(await api.createConversationDraft({ source: 'manual' }))
+      applyDraft(await api.createConversationDraft({ fields: {} }))
     } finally {
       loading.value = false
     }
@@ -123,21 +127,55 @@ export function createValuationConversationController(api: ConversationApi, opti
   async function ensureDraft(): Promise<ConversationDraft> {
     if (!draft.value) await restore()
     if (!draft.value) throw new Error('草稿创建失败，请重试')
+    if (expired.value) {
+      clearLocal()
+      throw new Error('草稿已过期，请重新填写')
+    }
     return draft.value
   }
 
-  function enqueue<T>(work: () => Promise<T>): Promise<T> {
-    pendingMutations += 1
-    saving.value = true
+  function enqueue<T>(work: () => Promise<T>, showSaving = true): Promise<T> {
+    if (showSaving) {
+      pendingMutations += 1
+      saving.value = true
+    }
     const result = mutationQueue.then(work)
     mutationQueue = result.catch(() => undefined)
+    if (!showSaving) return result
     return result.finally(() => {
       pendingMutations -= 1
       saving.value = pendingMutations > 0
     })
   }
 
-  async function patchFields(patch: Partial<DraftFields>, evidence?: string): Promise<void> {
+  function touch(): Promise<boolean> | undefined {
+    lastActivity = now()
+    persist()
+    if (!draft.value || expired.value) return
+    if (Date.parse(draft.value.expires_at) - now() > DRAFT_SERVER_TOUCH_WINDOW_MS) return
+    if (touchPromise) return touchPromise
+    // FL GET 不续期；只有真实 PATCH 才能刷新服务端 TTL。空 fields 不改字段，
+    // 但会按 FL CAS 契约生成新版本，因而组件会撤销旧核对并禁止旧版本确认。
+    touchPromise = enqueue(async () => {
+      const current = draft.value
+      if (!current || expired.value) return false
+      try {
+        applyDraft(await api.updateConversationDraft(current.id, {
+          base_version: current.version,
+          fields: {}
+        }))
+        return true
+      } catch (cause) {
+        error.value = cause instanceof Error ? cause.message : '草稿续期失败，请重新操作'
+        return false
+      }
+    }, false).finally(() => {
+      touchPromise = null
+    })
+    return touchPromise
+  }
+
+  async function patchFields(patch: Partial<DraftFields>, _evidence?: string): Promise<void> {
     operationId = ''
     completedRecord = null
     const current = await ensureDraft()
@@ -146,16 +184,13 @@ export function createValuationConversationController(api: ConversationApi, opti
       const fields = reconcileDraftFields(latest.fields, patch)
       try {
         applyDraft(await api.updateConversationDraft(latest.id, {
-          draft_version: latest.draft_version,
-          fields,
-          ...(evidence ? { evidence } : {})
+          base_version: latest.version,
+          fields
         }))
-        canUndo.value = true
         operationId = ''
         completedRecord = null
         error.value = ''
       } catch (cause) {
-        // 冲突或断网后以服务端版本为准；页面保留输入提示，不覆盖后续编辑。
         try {
           applyDraft(await api.getConversationDraft(latest.id))
         } catch {
@@ -205,20 +240,18 @@ export function createValuationConversationController(api: ConversationApi, opti
   }
 
   async function undo() {
-    const current = await ensureDraft()
+    await ensureDraft()
     await enqueue(async () => {
-      applyDraft(await api.undoConversationDraft(draft.value!.id, {
-        draft_version: draft.value!.draft_version
-      }))
+      const current = draft.value!
+      applyDraft(await api.undoConversationDraft(current.id, { base_version: current.version }))
       operationId = ''
       completedRecord = null
-      canUndo.value = false
       error.value = ''
     })
   }
 
   async function evaluationFromOperation(operation: ConversationOperation): Promise<EvaluationRecord> {
-    if (operation.status === 'failed') throw new Error(operation.error || '评估失败，请重试')
+    if (operation.status === 'failed') throw new Error(operation.error_code || '评估失败，请重试')
     if (operation.evaluation) return operation.evaluation
     if (operation.evaluation_id) return api.getEvaluation(operation.evaluation_id)
     throw new Error('评估结果尚未生成')
@@ -226,16 +259,15 @@ export function createValuationConversationController(api: ConversationApi, opti
 
   function confirm(expectedVersion?: number): Promise<EvaluationRecord> {
     if (confirmationPromise) {
-      if (expectedVersion !== undefined && expectedVersion !== draft.value?.draft_version) {
+      if (expectedVersion !== undefined && expectedVersion !== draft.value?.version) {
         return Promise.reject(new Error('草稿版本已变化，请重新核对'))
       }
       return confirmationPromise
     }
     const run = async () => {
       await mutationQueue.catch(() => undefined)
-      const current = draft.value
-      if (!current) throw new Error('请先创建车辆草稿')
-      if (expectedVersion !== undefined && expectedVersion !== current.draft_version) {
+      const current = await ensureDraft()
+      if (expectedVersion !== undefined && expectedVersion !== current.version) {
         throw new Error('草稿版本已变化，请重新核对')
       }
       const request = draftToEvaluationRequest(current)
@@ -246,15 +278,15 @@ export function createValuationConversationController(api: ConversationApi, opti
       try {
         if (!operationId) {
           operationId = newOperationId()
-          touch()
+          persist()
         }
         let operation = await api.createConversationOperation({
           operation_id: operationId,
           draft_id: current.id,
-          draft_version: current.draft_version,
+          draft_version: current.version,
           request
         })
-        for (let attempt = 0; operation.status === 'pending' || operation.status === 'processing'; attempt += 1) {
+        for (let attempt = 0; operation.status === 'pending'; attempt += 1) {
           if (attempt >= 60) throw new Error('评估仍在处理中，请稍后重试')
           await sleep(1000)
           operation = await api.getConversationOperation(operationId)
@@ -295,26 +327,9 @@ export function createValuationConversationController(api: ConversationApi, opti
   }
 
   return {
-    draft,
-    loading,
-    saving,
-    confirming,
-    error,
-    canUndo,
-    complete,
-    expired,
-    restore,
-    touch,
-    expireIfIdle,
-    setField,
-    setFields,
-    setDictionaryValue,
-    setUnknown,
-    setRange,
-    revalidateFields,
-    undo,
-    confirm,
-    reset
+    draft, loading, saving, confirming, error, canUndo, complete, expired,
+    restore, touch, expireIfIdle, setField, setFields, setDictionaryValue,
+    setUnknown, setRange, revalidateFields, undo, confirm, reset
   }
 }
 

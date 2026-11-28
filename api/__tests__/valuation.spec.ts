@@ -185,29 +185,19 @@ describe('整机评估端点', () => {
   })
 })
 
-describe('对话草稿与操作端点', () => {
-  const draft = {
-    id: 'draft-1',
-    draft_version: 2,
-    updated_at: '2026-11-20T10:00:00Z',
-    fields: { usage_hours: { status: 'value', value: 0 } }
-  }
-
-  it('草稿创建、CAS 更新、撤回与删除都走约定端点', async () => {
-    const { api, calls } = setup(() => wrapped(draft))
-    await api.createConversationDraft({ source: 'manual' })
+describe('对话草稿端点路径', () => {
+  it('创建、读取、修改、撤回与删除都走 FL 约定端点', async () => {
+    const { api, calls } = setup(() => wrapped({}))
+    await api.createConversationDraft({ fields: {}, supplemental: {} })
     await api.getConversationDraft('draft-1')
-    await api.updateConversationDraft('draft-1', {
-      draft_version: 2,
-      fields: { usage_hours: { status: 'value', value: 0 } }
-    })
-    await api.undoConversationDraft('draft-1', { draft_version: 2 })
+    await api.updateConversationDraft('draft-1', { base_version: 2, fields: {} })
+    await api.undoConversationDraft('draft-1', { base_version: 2 })
     await api.deleteConversationDraft('draft-1')
 
     expect(calls).toEqual([
       {
         path: '/api/valuation/conversation/drafts',
-        init: { method: 'POST', body: { source: 'manual' } }
+        init: { method: 'POST', body: { fields: {}, supplemental: {} } }
       },
       {
         path: '/api/valuation/conversation/drafts/draft-1',
@@ -215,23 +205,57 @@ describe('对话草稿与操作端点', () => {
       },
       {
         path: '/api/valuation/conversation/drafts/draft-1',
-        init: {
-          method: 'PATCH',
-          body: {
-            draft_version: 2,
-            fields: { usage_hours: { status: 'value', value: 0 } }
-          }
-        }
+        init: { method: 'PATCH', body: { base_version: 2, fields: {} } }
       },
       {
         path: '/api/valuation/conversation/drafts/draft-1/undo',
-        init: { method: 'POST', body: { draft_version: 2 } }
+        init: { method: 'POST', body: { base_version: 2 } }
       },
       {
         path: '/api/valuation/conversation/drafts/draft-1',
         init: { method: 'DELETE' }
       }
     ])
+  })
+
+  it('DELETE 204 无响应体也是成功，不套用 JSON 信封解包', async () => {
+    const { api } = setup(() => undefined)
+    await expect(api.deleteConversationDraft('draft-1')).resolves.toBeUndefined()
+  })
+
+  it('草稿按 FL wire 契约反序列化，PATCH 与 undo 发送 base_version 和 state/range/candidates', async () => {
+    const upstream = {
+      id: 'draft-1',
+      version: 2,
+      status: 'editing',
+      updated_at: '2026-11-20T10:00:00Z',
+      expires_at: '2026-11-20T10:30:00Z',
+      can_undo: true,
+      can_submit: false,
+      supplemental: {},
+      fields: {
+        usage_hours: { state: 'range', range: { min: 0, max: 100 }, source: 'user' },
+        tonnage: { state: 'candidate', candidates: [{ value: 3 }, { value: 3.5 }] }
+      }
+    }
+    const { api, calls } = setup(() => wrapped(upstream))
+    expect(await api.getConversationDraft('draft-1')).toEqual(upstream)
+    await api.updateConversationDraft('draft-1', {
+      base_version: 2,
+      fields: {
+        usage_hours: { status: 'range', min: 0, max: 100 },
+        tonnage: { status: 'candidate', candidates: [3, 3.5] }
+      }
+    })
+    await api.undoConversationDraft('draft-1', { base_version: 2 })
+    expect(calls[1]?.init?.body).toEqual({
+      base_version: 2,
+      fields: {
+        usage_hours: { state: 'range', range: { min: 0, max: 100 } },
+        tonnage: { state: 'candidate', candidates: [{ value: 3 }, { value: 3.5 }] }
+      }
+    })
+    expect(calls[2]?.init?.body).toEqual({ base_version: 2 })
   })
 
   it('操作提交和查询保留同一 operation_id，并解包正式结果', async () => {

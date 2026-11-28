@@ -1,5 +1,6 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import type { ValuationApi } from '~/api/valuation'
+import { downstreamValuationFields } from '~/utils/valuationDependencies'
 
 export type WholeMachineDictionaryForm = {
   brand?: string
@@ -18,19 +19,9 @@ export const OTHER_SERIES_VALUE = '其它'
 export const NONE_MAST_TYPE_VALUE = '无'
 export const NONE_MAST_HEIGHT_VALUE = 0
 
-const DOWNSTREAM: Partial<Record<keyof WholeMachineDictionaryForm, Array<keyof WholeMachineDictionaryForm>>> = {
-  brand: ['vehicle_type', 'series', 'tonnage', 'config_type', 'mast_type', 'mast_height_mm', 'factory_year'],
-  vehicle_type: ['series', 'tonnage', 'config_type', 'mast_type', 'mast_height_mm', 'factory_year'],
-  series: ['tonnage', 'config_type', 'mast_type', 'mast_height_mm', 'factory_year'],
-  tonnage: ['config_type', 'mast_type', 'mast_height_mm', 'factory_year'],
-  config_type: ['mast_type', 'mast_height_mm'],
-  mast_type: ['mast_height_mm'],
-  province: ['city']
-}
-
 /** 旧表单沿用「上游变化清空下游」；对话草稿由控制器按字典兼容性重验。 */
 export function resetDownstreamFormFields(form: WholeMachineDictionaryForm, key: keyof WholeMachineDictionaryForm) {
-  for (const child of DOWNSTREAM[key] ?? []) form[child] = undefined
+  for (const child of downstreamValuationFields(key)) form[child] = undefined
 }
 
 export function useWholeMachineDictionaries(
@@ -225,7 +216,7 @@ export function useWholeMachineDictionaries(
   })
 
   function clearOptions() {
-    for (const key of Object.keys(DOWNSTREAM) as Array<keyof WholeMachineDictionaryForm>) {
+    for (const key of ['brand', 'vehicle_type', 'series', 'tonnage', 'config_type', 'mast_type', 'province'] as const) {
       versions.set(key, (versions.get(key) ?? 0) + 1)
     }
     vehicleTypes.value = []

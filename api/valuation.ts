@@ -1,4 +1,52 @@
-import type { ConversationDraft, ConversationOperation, DraftFields } from '~/utils/valuationConversation'
+import type { DraftFields } from '~/utils/valuationConversation'
+
+/** FL backend/internal/valuation/conversation_dto.go 的 wire 契约，不在门户另造 draft_version/status 形状。 */
+export interface UpstreamDraftField {
+  state: 'missing' | 'unknown' | 'value' | 'range' | 'candidate'
+  value?: string | number | boolean
+  range?: { min: number; max: number }
+  candidates?: Array<{ value: string | number | boolean; id?: string; label?: string; source?: string; evidence?: unknown }>
+  source?: string
+  evidence?: unknown
+}
+
+export interface UpstreamConversationDraft {
+  id: string
+  version: number
+  status: 'editing' | 'submitted'
+  fields: Partial<Record<keyof DraftFields, UpstreamDraftField>>
+  supplemental: Record<string, unknown>
+  can_undo: boolean
+  can_submit: boolean
+  updated_at: string
+  expires_at: string
+}
+
+export interface ConversationDraftPatch {
+  base_version: number
+  fields?: Partial<Record<keyof DraftFields, UpstreamDraftField>>
+  supplemental?: Record<string, unknown>
+}
+
+export function draftFieldsToUpstream(fields: Partial<DraftFields>): ConversationDraftPatch['fields'] {
+  return Object.fromEntries(Object.entries(fields).map(([key, field]) => {
+    const common = {
+      ...(field.evidence !== undefined ? { evidence: field.evidence } : {}),
+      ...(field.source !== undefined ? { source: field.source } : {})
+    }
+    if (field.status === 'range') return [key, { state: field.status, range: { min: field.min!, max: field.max! }, ...common }]
+    if (field.status === 'candidate') return [key, {
+      state: field.status,
+      candidates: (field.candidates ?? []).map((value) => ({ value, source: field.source })),
+      ...common
+    }]
+    return [key, {
+      state: field.status,
+      ...(field.status === 'value' ? { value: field.value } : {}),
+      ...common
+    }]
+  }))
+}
 
 // 残值评估数据访问层（票 #32）：页面组件不直接 $fetch（与 api/featured.ts 同一个约定）。
 //
@@ -445,27 +493,22 @@ export function createValuationApi(fetcher: ValuationFetcher) {
     },
 
     // ===== 整机评估 =====
-    createConversationDraft: (body: { source?: 'manual' | 'conversation' } = {}) =>
-      post<ConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts`, body),
+    createConversationDraft: (body: { fields?: Partial<Record<keyof DraftFields, UpstreamDraftField>>; supplemental?: Record<string, unknown> } = {}) =>
+      post<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts`, body),
     getConversationDraft: (id: string) =>
-      get<ConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`),
-    updateConversationDraft: (
-      id: string,
-      body: { draft_version: number; fields: Partial<DraftFields>; evidence?: string }
-    ) =>
-      patch<ConversationDraft>(
+      get<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`),
+    updateConversationDraft: (id: string, body: Omit<ConversationDraftPatch, 'fields'> & { fields?: Partial<DraftFields> }) =>
+      patch<UpstreamConversationDraft>(
         `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`,
-        body
+        { ...body, ...(body.fields ? { fields: draftFieldsToUpstream(body.fields) } : {}) }
       ),
-    undoConversationDraft: (id: string, body: { draft_version: number }) =>
-      post<ConversationDraft>(
+    undoConversationDraft: (id: string, body: { base_version: number }) =>
+      post<UpstreamConversationDraft>(
         `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}/undo`,
         body
       ),
-    deleteConversationDraft: (id: string) =>
-      remove<{ deleted: boolean }>(
-        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`
-      ),
+    deleteConversationDraft: (id: string): Promise<void> =>
+      fetcher(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(() => undefined),
     createConversationOperation: (body: {
       operation_id: string
       draft_id: string

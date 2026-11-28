@@ -10,24 +10,39 @@ let serverFields: DraftFields = createDraftFields()
 let serverVersion = 0
 let serverHistory: DraftFields[] = []
 
+function upstreamDraft(version: number, fields: DraftFields) {
+  return {
+    id: 'draft-1', version, status: 'editing' as const,
+    updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    supplemental: {}, can_undo: serverHistory.length > 0, can_submit: false,
+    fields: Object.fromEntries(Object.entries(fields).map(([key, field]) => {
+      const common = { ...(field.evidence ? { evidence: field.evidence } : {}), ...(field.source ? { source: field.source } : {}) }
+      if (field.status === 'range') return [key, { state: 'range', range: { min: field.min, max: field.max }, ...common }]
+      if (field.status === 'candidate') return [key, { state: 'candidate', candidates: field.candidates?.map((value) => ({ value })), ...common }]
+      return [key, { state: field.status, ...(field.status === 'value' ? { value: field.value } : {}), ...common }]
+    }))
+  }
+}
+
 const apiMock = {
   createConversationDraft: vi.fn(async () => {
     serverVersion = 1
-    return { id: 'draft-1', draft_version: serverVersion, updated_at: new Date().toISOString(), fields: serverFields }
+    return upstreamDraft(serverVersion, serverFields)
   }),
-  getConversationDraft: vi.fn(async () => ({
-    id: 'draft-1', draft_version: serverVersion, updated_at: new Date().toISOString(), fields: serverFields
-  })),
-  updateConversationDraft: vi.fn(async (_id: string, body: { draft_version: number; fields: Partial<DraftFields> }) => {
-    expect(body.draft_version).toBe(serverVersion)
+  getConversationDraft: vi.fn(async () => upstreamDraft(serverVersion, serverFields)),
+  updateConversationDraft: vi.fn(async (_id: string, body: { base_version: number; fields: Partial<DraftFields> }) => {
+    expect(body.base_version).toBe(serverVersion)
     serverHistory.push(serverFields)
     serverVersion += 1
     serverFields = { ...serverFields, ...body.fields }
-    return { id: 'draft-1', draft_version: serverVersion, updated_at: new Date().toISOString(), fields: serverFields }
+    return upstreamDraft(serverVersion, serverFields)
   }),
-  undoConversationDraft: vi.fn(async () => {
+  undoConversationDraft: vi.fn(async (_id: string, body: { base_version: number }) => {
+    expect(body.base_version).toBe(serverVersion)
     serverFields = serverHistory.pop() ?? serverFields
-    return { id: 'draft-1', draft_version: ++serverVersion, updated_at: new Date().toISOString(), fields: serverFields }
+    serverHistory = []
+    serverVersion += 1
+    return upstreamDraft(serverVersion, serverFields)
   }),
   deleteConversationDraft: vi.fn(async () => ({ deleted: true })),
   createConversationOperation: vi.fn(async (body: { operation_id: string; request: EvaluationRequest }) => ({
@@ -58,27 +73,27 @@ const apiMock = {
   getConversationOperation: vi.fn(),
   getEvaluation: vi.fn(),
   listVehicleTypes: vi.fn(async () => [{ id: 1, name: '电动平衡重式', power_type: 'electric', earliest_factory_year: 2000 }]),
-  listSeries: vi.fn(async () => [{ id: 1, brand: '合力', name: 'H 系列', earliest_factory_year: 2000 }]),
-  listTonnages: vi.fn(async () => [{ id: 1, value: 3 }]),
-  listConfigTypes: vi.fn(async () => [{ id: 1, name: '标准' }]),
+  listSeries: vi.fn(async () => [{ id: 1, brand: '林德', name: 'E系列', earliest_factory_year: 2000 }]),
+  listTonnages: vi.fn(async () => [{ id: 1, value: 2 }]),
+  listConfigTypes: vi.fn(async () => [{ id: 1, name: '磷酸铁锂(LFP)' }]),
   getEarliestFactoryYear: vi.fn(async () => 2000),
   listMastTypes: vi.fn(async () => [{ id: 1, name: '两级门架' }]),
   listMastHeights: vi.fn(async () => [{ id: 1, value_mm: 3000 }, { id: 2, value_mm: 0 }]),
-  listCities: vi.fn(async () => ['苏州市'])
+  listCities: vi.fn(async () => ['苏州'])
 }
 
 vi.mock('~/composables/useValuationApi', () => ({ useValuationApi: () => apiMock }))
 
 const props = {
-  brands: [{ id: 1, name: '合力', k_brand: 1, is_active: true }],
-  provinces: ['江苏省'],
+  brands: [{ id: 1, name: '林德', k_brand: 1, is_active: true }],
+  provinces: ['江苏'],
   conditionRatings: [{ id: 1, rating: 'B', label: '良好', base_coefficient: 0.9 }]
 }
 
-async function mountPage() {
+async function mountPage(expectedVersion = 1) {
   const wrapper = await mountSuspended(ValuationConversation, { props, route: '/valuation/conversation' })
   await flushPromises()
-  await vi.waitFor(() => expect(wrapper.get('[data-test="draft-version"]').text()).toContain('1'))
+  await vi.waitFor(() => expect(wrapper.get('[data-test="draft-version"]').text()).toContain(String(expectedVersion)))
   return wrapper
 }
 
@@ -125,10 +140,10 @@ describe('对话内联评估组件', () => {
     expect(wrapper.get('[data-test="factory_year-dictionary"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-test="brand-dictionary"]').findAll('option')).toHaveLength(2)
     const brand = wrapper.get('[data-test="brand-dictionary"]').element as HTMLSelectElement
-    brand.value = '合力'
+    brand.value = '林德'
     brand.dispatchEvent(new Event('change'))
     await flushPromises()
-    expect(serverFields.brand).toMatchObject({ status: 'value', value: '合力', source: 'dictionary' })
+    expect(serverFields.brand).toMatchObject({ status: 'value', value: '林德', source: 'dictionary' })
 
     await wrapper.get('[data-test="usage_hours"]').setValue('0')
     await flushPromises()
@@ -163,12 +178,12 @@ describe('对话内联评估组件', () => {
     await loadDemo(wrapper)
     await vi.waitFor(() => {
       expect(wrapper.get('[data-test="vehicle_type-dictionary"]').findAll('option').map((option) => option.text())).toContain('电动平衡重式')
-      expect(wrapper.get('[data-test="series-dictionary"]').findAll('option').map((option) => option.text())).toContain('H 系列')
-      expect(wrapper.get('[data-test="tonnage-dictionary"]').findAll('option').map((option) => option.text())).toContain('3 吨')
-      expect(wrapper.get('[data-test="config_type-dictionary"]').findAll('option').map((option) => option.text())).toContain('标准')
+      expect(wrapper.get('[data-test="series-dictionary"]').findAll('option').map((option) => option.text())).toContain('E系列')
+      expect(wrapper.get('[data-test="tonnage-dictionary"]').findAll('option').map((option) => option.text())).toContain('2 吨')
+      expect(wrapper.get('[data-test="config_type-dictionary"]').findAll('option').map((option) => option.text())).toContain('磷酸铁锂(LFP)')
       expect(wrapper.get('[data-test="mast_type-dictionary"]').findAll('option').map((option) => option.text())).toContain('两级门架')
       expect(wrapper.get('[data-test="mast_height_mm-dictionary"]').findAll('option').map((option) => option.text())).toContain('3000 mm')
-      expect(wrapper.get('[data-test="city-dictionary"]').findAll('option').map((option) => option.text())).toContain('苏州市')
+      expect(wrapper.get('[data-test="city-dictionary"]').findAll('option').map((option) => option.text())).toContain('苏州')
     })
   })
 
@@ -182,6 +197,24 @@ describe('对话内联评估组件', () => {
     await flushPromises()
     expect(serverFields.usage_hours).toMatchObject({ status: 'value', value: 4800 })
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
+  })
+
+  it('刷新后仍按服务端 can_undo 撤回最近一次修改', async () => {
+    const wrapper = await mountPage()
+    await loadDemo(wrapper)
+    await wrapper.get('[data-test="usage_hours"]').setValue('6200')
+    await flushPromises()
+    wrapper.unmount()
+
+    const restored = await mountPage(3)
+    await restored.get('[data-test="toggle-draft"]').trigger('click')
+    await flushPromises()
+    expect(restored.get('[data-test="draft-version"]').text()).toContain('3')
+    expect(restored.get('[data-test="undo"]').attributes('disabled')).toBeUndefined()
+    await restored.get('[data-test="undo"]').trigger('click')
+    await flushPromises()
+    expect(serverFields.usage_hours).toMatchObject({ status: 'value', value: 4800 })
+    expect(restored.get('[data-test="undo"]').attributes('disabled')).toBeDefined()
   })
 
   it('明确未知与工时范围保持未核对状态，改为具体 0 小时后恢复可确认', async () => {

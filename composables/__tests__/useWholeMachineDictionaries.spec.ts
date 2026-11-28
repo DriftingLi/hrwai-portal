@@ -16,8 +16,8 @@ function completeForm(): WholeMachineDictionaryForm {
     mast_type: '两级门架',
     mast_height_mm: 3000,
     factory_year: 2021,
-    province: '江苏省',
-    city: '苏州市'
+    province: '江苏',
+    city: '苏州'
   }
 }
 
@@ -30,7 +30,7 @@ function setup() {
     getEarliestFactoryYear: vi.fn(async () => 2000),
     listMastTypes: vi.fn(async () => [{ id: 1, name: '两级门架' }]),
     listMastHeights: vi.fn(async () => [{ id: 1, value_mm: 3000 }]),
-    listCities: vi.fn(async () => ['苏州市'])
+    listCities: vi.fn(async () => ['苏州'])
   }
   const form = reactive<WholeMachineDictionaryForm>({})
   const scope = effectScope()
@@ -51,7 +51,7 @@ describe('整机字典共享级联', () => {
       expect(dictionaries.configTypes.value).toEqual([{ id: 1, name: '标准' }])
       expect(dictionaries.mastTypeOptions.value.map((item) => item.name)).toEqual(['两级门架', '无'])
       expect(dictionaries.mastHeightOptions.value.map((item) => item.value_mm)).toEqual([3000, 0])
-      expect(dictionaries.cities.value).toEqual(['苏州市'])
+      expect(dictionaries.cities.value).toEqual(['苏州'])
       expect(dictionaries.factoryYearOptions.value[0]).toBe(new Date().getFullYear())
       expect(dictionaries.loading.value).toBe(false)
     })
@@ -66,7 +66,7 @@ describe('整机字典共享级联', () => {
     expect(form.mast_type).toBeUndefined()
     expect(form.mast_height_mm).toBeUndefined()
     expect(form.factory_year).toBeUndefined()
-    expect(form.city).toBe('苏州市')
+    expect(form.city).toBe('苏州')
   })
 
   it('快速切换品牌时迟到的旧响应不能覆盖新字典', async () => {

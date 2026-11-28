@@ -4,6 +4,7 @@ import {
   createDraftFields,
   draftToEvaluationRequest,
   isDraftComplete,
+  normalizeConversationDraft,
   readDraftSession,
   reconcileDraftFields,
   valueField,
@@ -15,11 +16,7 @@ import {
 const currentYear = new Date().getFullYear()
 
 function completeDraft(): ConversationDraft {
-  return {
-    id: 'draft-1',
-    draft_version: 3,
-    updated_at: new Date().toISOString(),
-    fields: createDraftFields({
+  const fields = createDraftFields({
       brand: '合力',
       vehicle_type: '电动平衡重式',
       series: 'H 系列',
@@ -31,17 +28,42 @@ function completeDraft(): ConversationDraft {
       sale_year: currentYear,
       usage_hours: 0,
       original_paint: false,
-      province: '江苏省',
-      city: '苏州市',
+      province: '江苏',
+      city: '苏州',
       has_license_plate: false,
       has_registration_certificate: false,
       has_maintenance_records: false,
       condition_rating: 'B'
     })
-  }
+  return normalizeConversationDraft({
+    id: 'draft-1', version: 3, status: 'editing', updated_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    supplemental: {}, can_undo: true, can_submit: true,
+    fields: Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, {
+      state: field.status,
+      ...(field.status === 'value' ? { value: field.value } : {}),
+      ...(field.source ? { source: field.source } : {})
+    }]))
+  })
 }
 
 describe('估值对话草稿状态机', () => {
+  it('按 FL state/range/candidates 契约读取真实零值和范围候选', () => {
+    const draft = normalizeConversationDraft({
+      id: 'draft-1', version: 7, status: 'editing', updated_at: '2026-11-20T10:00:00Z',
+      expires_at: '2026-11-20T10:30:00Z', supplemental: {}, can_undo: true, can_submit: false,
+      fields: {
+        usage_hours: { state: 'range', range: { min: 0, max: 100 } },
+        tonnage: { state: 'candidate', candidates: [{ value: 3 }, { value: 3.5 }] },
+        original_paint: { state: 'value', value: false }
+      }
+    })
+    expect(draft).toMatchObject({ version: 7, status: 'editing', can_undo: true })
+    expect(draft.fields.usage_hours).toEqual({ status: 'range', min: 0, max: 100 })
+    expect(draft.fields.tonnage).toEqual({ status: 'candidate', candidates: [3, 3.5] })
+    expect(draft.fields.original_paint).toEqual({ status: 'value', value: false })
+    expect(draft.fields.brand).toEqual({ status: 'missing' })
+  })
   it('区分未提供、明确未知、范围、候选和具体值', () => {
     const fields = createDraftFields()
     expect(fields.brand).toEqual({ status: 'missing' })
@@ -98,7 +120,7 @@ describe('估值对话草稿状态机', () => {
 
     expect(fields.tonnage).toEqual({ status: 'value', value: 3.5 })
     expect(fields.usage_hours).toMatchObject({ status: 'value', value: 0 })
-    expect(fields.city).toMatchObject({ status: 'value', value: '苏州市' })
+    expect(fields.city).toMatchObject({ status: 'value', value: '苏州' })
     expect(fields.config_type).toMatchObject({ status: 'value', value: '标准' })
     expect(fields.mast_type).toMatchObject({ status: 'value', value: '两级门架' })
     expect(fields.mast_height_mm).toMatchObject({ status: 'value', value: 0 })
@@ -126,11 +148,12 @@ describe('草稿标签页恢复', () => {
     }
     writeDraftSession(session, {
       id: 'draft-1',
+      expires_at: new Date(Date.now() + DRAFT_IDLE_TIMEOUT_MS).toISOString(),
       operation_id: 'operation-1',
       updated_at: new Date().toISOString()
     })
     const raw = storage.get('hrwai:valuation-conversation:draft:v1') ?? ''
-    expect(Object.keys(JSON.parse(raw))).toEqual(['id', 'operation_id', 'updated_at'])
+    expect(Object.keys(JSON.parse(raw))).toEqual(['id', 'expires_at', 'operation_id', 'updated_at'])
     expect(raw).not.toContain('message')
     expect(raw).not.toContain('estimated_value')
     expect(readDraftSession(session, Date.now())).toMatchObject({
