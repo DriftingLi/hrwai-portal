@@ -8,6 +8,7 @@ import {
   evaluationReportPath,
   valuationErrorMessage,
   valuationErrorStatus,
+  ValuationApiError,
   type ValuationFetcher,
   type ValuationRequestInit,
   type EvaluationRequest
@@ -476,6 +477,13 @@ describe('错误与下载地址', () => {
     expect(valuationErrorStatus({ response: { status: 403 } })).toBe(403)
     expect(valuationErrorStatus(null)).toBeNull()
     expect(valuationErrorStatus({ status: 'oops' })).toBeNull()
+  })
+
+  it('ValuationApiError 的上置信封 code 可作为 HTTP 状态识别', () => {
+    expect(valuationErrorStatus(new ValuationApiError('描述未通过校验', 400))).toBe(400)
+    expect(valuationErrorStatus(new ValuationApiError('建议额度已耗尽', 429))).toBe(429)
+    expect(valuationErrorStatus(new ValuationApiError('建议等待超时', 408))).toBe(408)
+    expect(valuationErrorStatus(new ValuationApiError('上游超时', 504))).toBe(504)
   })
 
   it('可展示文案优先取服务端 message，跳过 ofetch 原始串与本地异常', () => {

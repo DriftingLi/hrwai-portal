@@ -88,7 +88,7 @@ function isFieldValue(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 }
 
-function fieldEvidence(value: unknown): string | undefined {
+export function fieldEvidence(value: unknown): string | undefined {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
     const entries = value.filter((entry): entry is string => typeof entry === 'string')

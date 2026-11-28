@@ -22,7 +22,7 @@ describe('模型建议复核卡', () => {
           tonnage: {
             state: 'candidate',
             candidates: [
-              { id: 'tonnage:3', label: '3 吨', value: 3, source: 'user' },
+              { id: 'tonnage:3', value: 3, source: 'user' },
               { id: 'tonnage:3.5', label: '3.5 吨', value: 3.5, source: 'dictionary' }
             ]
           }
@@ -34,6 +34,7 @@ describe('模型建议复核卡', () => {
     expect(wrapper.text()).toContain('不会自动选择价高或排第一的候选')
     expect(wrapper.findAll('[data-test^="candidate-tonnage-"]')).toHaveLength(2)
     expect(wrapper.get('[data-test="candidate-tonnage-3.5"]').text()).toContain('tonnage:3.5')
+    expect(wrapper.get('[data-test="candidate-tonnage-3"]').text()).toContain('3 吨')
     expect(wrapper.emitted('choose')).toBeUndefined()
 
     await wrapper.get('[data-test="candidate-tonnage-3.5"]').trigger('click')

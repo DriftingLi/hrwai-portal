@@ -157,6 +157,7 @@ export function valuationErrorMessage(error: unknown, fallback = '操作失败�
 /** 从各类 fetch 异常里取 HTTP 状态码（401 用来决定跳登录页） */
 export function valuationErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') return null
+  if (error instanceof ValuationApiError) return error.code || null
   const record = error as {
     status?: unknown
     statusCode?: unknown

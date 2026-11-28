@@ -234,7 +234,7 @@ describe('对话内联评估组件', () => {
           usage_hours: { state: 'value', value: 0 },
           has_registration_certificate: { state: 'value', value: false }
         },
-        supplements: {}, questions: [], draft_version: 2
+        supplements: {}, questions: [], draft_version: 3
       }
     })
     await wrapper.get('[data-test="message-input"]').setValue('0 小时，没有登记证')
@@ -384,7 +384,7 @@ describe('对话内联评估组件', () => {
           tonnage: { state: 'value', value: 2 },
           factory_year: { state: 'value', value: 2020 }
         },
-        supplements: {}, questions: [], draft_version: 2
+        supplements: {}, questions: [], draft_version: 1
       }
     })
     const wrapper = await mountPage(1, true)

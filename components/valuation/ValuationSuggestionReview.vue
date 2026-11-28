@@ -23,7 +23,7 @@
               @click="emit('choose', field.key, candidate.value)"
             >
               <span>
-                <strong>{{ candidate.label || formatValue(field.key, candidate.value) }}</strong>
+                <strong>{{ candidate.label || formatConversationField(field.key, { status: 'value', value: candidate.value }) }}</strong>
                 <small>{{ candidate.id || '当前确认值' }} · {{ candidate.source === 'dictionary' ? '真实目录' : '当前草稿' }}</small>
               </span>
               <span class="choose-label">选择此项</span>
@@ -60,7 +60,7 @@
 import { computed } from 'vue'
 import type { DraftFieldKey, DraftFields } from '~/utils/valuationConversation'
 import type { UpstreamDraftField, ValuationSuggestionResult } from '~/api/valuation'
-import { valuationConversationFields } from '~/utils/valuationConversationFields'
+import { valuationConversationFields, formatConversationField } from '~/utils/valuationConversationFields'
 
 const props = withDefaults(defineProps<{ result: ValuationSuggestionResult; busy?: boolean }>(), { busy: false })
 const emit = defineEmits<{ choose: [key: DraftFieldKey, value: string | number | boolean] }>()
@@ -70,15 +70,6 @@ function fieldLabel(key: string) {
   return labels.get(key as DraftFieldKey) ?? key
 }
 
-function formatValue(key: DraftFieldKey, value: string | number | boolean): string {
-  if (typeof value === 'boolean') return value ? '是' : '否'
-  if (key === 'tonnage') return `${value} 吨`
-  if (key === 'usage_hours') return `${value} 小时`
-  if (key === 'mast_height_mm') return value === 0 ? '无' : `${value} mm`
-  if (key === 'factory_year' || key === 'sale_year') return `${value} 年`
-  return String(value)
-}
-
 const candidateFields = computed(() => Object.entries(props.result.patches)
   .filter((entry): entry is [DraftFieldKey, UpstreamDraftField & { state: 'candidate' }] => entry[1]?.state === 'candidate')
   .map(([key, field]) => ({ key, candidates: field.candidates ?? [] }))
@@ -86,7 +77,7 @@ const candidateFields = computed(() => Object.entries(props.result.patches)
 
 const valueItems = computed(() => Object.entries(props.result.patches)
   .filter((entry): entry is [DraftFieldKey, UpstreamDraftField & { state: 'value' }] => entry[1]?.state === 'value')
-  .map(([key, field]) => ({ key, text: formatValue(key, field.value as string | number | boolean) })))
+  .map(([key, field]) => ({ key, text: formatConversationField(key, { status: 'value', value: field.value as string | number | boolean }) })))
 
 const supplementItems = computed(() => Object.entries(props.result.supplements)
   .map(([key, value]) => ({ key: key as keyof DraftFields, value })))
