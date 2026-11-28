@@ -9,6 +9,7 @@ import {
   EXPLANATION_REQUEST_TIMEOUT_MS,
   valuationErrorMessage,
   valuationErrorStatus,
+  ValuationApiError,
   type ValuationFetcher,
   type ValuationRequestInit,
   type EvaluationRequest
@@ -217,6 +218,21 @@ describe('对话草稿端点路径', () => {
         init: { method: 'DELETE' }
       }
     ])
+  })
+
+  it('建议提交使用 FL 的 operation_id/base_version/text，并接受 202 信封', async () => {
+    const operation = {
+      id: 'op:draft-1:suggestion-1', kind: 'suggestion', operation_id: 'op:draft-1:suggestion-1',
+      draft_id: 'draft-1', base_version: 2, status: 'pending'
+    }
+    const { api, calls } = setup(() => ({ code: 202, message: 'accepted', data: operation }))
+    const body = { operation_id: 'suggestion-1', base_version: 2, text: '3.5 吨，0 小时，没有登记证' }
+
+    await expect(api.suggestConversationDraft('draft-1', body)).resolves.toEqual(operation)
+    expect(calls).toEqual([{
+      path: '/api/valuation/conversation/drafts/draft-1/suggestions',
+      init: { method: 'POST', body }
+    }])
   })
 
   it('DELETE 204 无响应体也是成功，不套用 JSON 信封解包', async () => {
@@ -564,6 +580,13 @@ describe('错误与下载地址', () => {
     expect(valuationErrorStatus({ code: 422 })).toBe(422)
     expect(valuationErrorStatus(null)).toBeNull()
     expect(valuationErrorStatus({ status: 'oops' })).toBeNull()
+  })
+
+  it('ValuationApiError 的上置信封 code 可作为 HTTP 状态识别', () => {
+    expect(valuationErrorStatus(new ValuationApiError('描述未通过校验', 400))).toBe(400)
+    expect(valuationErrorStatus(new ValuationApiError('建议额度已耗尽', 429))).toBe(429)
+    expect(valuationErrorStatus(new ValuationApiError('建议等待超时', 408))).toBe(408)
+    expect(valuationErrorStatus(new ValuationApiError('上游超时', 504))).toBe(504)
   })
 
   it('可展示文案优先取服务端 message，跳过 ofetch 原始串与本地异常', () => {

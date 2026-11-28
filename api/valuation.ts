@@ -1,4 +1,4 @@
-import type { ConversationOperation, DraftFields } from '~/utils/valuationConversation'
+import type { DraftFields } from '~/utils/valuationConversation'
 
 /** FL backend/internal/valuation/conversation_dto.go 的 wire 契约，不在门户另造 draft_version/status 形状。 */
 export interface UpstreamDraftField {
@@ -26,6 +26,51 @@ export interface ConversationDraftPatch {
   base_version: number
   fields?: Partial<Record<keyof DraftFields, UpstreamDraftField>>
   supplemental?: Record<string, unknown>
+}
+
+export interface SuggestConversationDraftRequest {
+  operation_id: string
+  base_version: number
+  text: string
+}
+
+export interface ValuationSuggestionResult {
+  schema_version: number
+  patches: Partial<Record<keyof DraftFields, UpstreamDraftField>>
+  supplements: Record<string, string>
+  questions: string[]
+  draft_version: number
+}
+
+export interface UpstreamSuggestionOperation {
+  id: string
+  kind: 'suggestion'
+  operation_id: string
+  draft_id: string
+  base_version: number
+  status: 'pending' | 'succeeded' | 'failed' | 'stale'
+  error_code?: string
+  result?: ValuationSuggestionResult
+  first_accepted_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationOperation {
+  id: string
+  kind?: 'evaluation' | 'suggestion'
+  operation_id: string
+  draft_id: string
+  draft_version?: number
+  base_version?: number
+  status: 'pending' | 'succeeded' | 'failed' | 'stale'
+  error_code?: string
+  evaluation_id?: number
+  evaluation?: EvaluationRecord
+  result?: ValuationSuggestionResult
+  first_accepted_user_id: unknown
+  created_at: string
+  updated_at: string
 }
 
 export function draftFieldsToUpstream(fields: Partial<DraftFields>): ConversationDraftPatch['fields'] {
@@ -114,6 +159,7 @@ export function valuationErrorMessage(error: unknown, fallback = '操作失败�
 /** 从各类 fetch 异常里取 HTTP 状态码（401 用来决定跳登录页） */
 export function valuationErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') return null
+  if (error instanceof ValuationApiError) return error.code || null
   const record = error as {
     status?: unknown
     statusCode?: unknown
@@ -128,14 +174,15 @@ export function valuationErrorStatus(error: unknown): number | null {
   return null
 }
 
-function unwrap<T>(payload: unknown): T {
+function unwrap<T>(payload: unknown, acceptedCodes: readonly number[] = []): T {
   const wrapped = payload as Wrapped<T> | null
   if (!wrapped || typeof wrapped !== 'object' || typeof wrapped.code !== 'number') {
     throw new ValuationApiError('估值接口响应格式错误')
   }
   // FL 的异步受理端点（建议 / 解释）返回 202 Accepted，信封 code 与 HTTP 状态一致；
-  // 2xx 都算成功，不能只认 200。
-  if (wrapped.code < 200 || wrapped.code >= 300) {
+  // 2xx 都算成功，调用方显式列出的 acceptedCodes 再额外放行非 2xx 的业务码。
+  const accepted = (wrapped.code >= 200 && wrapped.code < 300) || acceptedCodes.includes(wrapped.code)
+  if (!accepted) {
     throw new ValuationApiError(wrapped.message || '估值接口请求失败', wrapped.code)
   }
   return wrapped.data
@@ -742,6 +789,11 @@ export function createValuationApi(fetcher: ValuationFetcher) {
       post<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts`, body),
     getConversationDraft: (id: string) =>
       get<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`),
+    suggestConversationDraft: async (id: string, body: SuggestConversationDraftRequest) =>
+      unwrap<UpstreamSuggestionOperation>(await fetcher(
+        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}/suggestions`,
+        { method: 'POST', body }
+      ), [200, 202]),
     updateConversationDraft: (id: string, body: Omit<ConversationDraftPatch, 'fields'> & { fields?: Partial<DraftFields> }) =>
       patch<UpstreamConversationDraft>(
         `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`,

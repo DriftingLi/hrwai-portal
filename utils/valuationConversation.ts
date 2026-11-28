@@ -1,4 +1,4 @@
-import type { EvaluationRecord, EvaluationRequest, TrialDraft, UpstreamConversationDraft } from '~/api/valuation'
+import type { ConversationOperation as ApiConversationOperation, EvaluationRequest, TrialDraft, UpstreamConversationDraft } from '~/api/valuation'
 import { dependentValuationFields } from '~/utils/valuationDependencies'
 import { validateEvaluationForm, type ValidatableForm } from '~/utils/valuationValidator'
 
@@ -14,9 +14,9 @@ export interface DraftField {
   value?: string | number | boolean
   min?: number
   max?: number
-  candidates?: Array<string | number>
+  candidates?: Array<string | number | boolean>
   evidence?: string
-  source?: 'user' | 'dictionary' | 'default'
+  source?: 'user' | 'dictionary' | 'default' | 'ai'
 }
 
 export type DraftFields = Record<DraftFieldKey, DraftField>
@@ -34,19 +34,7 @@ export interface ConversationDraft {
   fields: DraftFields
 }
 
-export interface ConversationOperation {
-  id: string
-  operation_id: string
-  draft_id: string
-  draft_version: number
-  status: 'pending' | 'succeeded' | 'failed'
-  evaluation_id?: number
-  evaluation?: EvaluationRecord
-  error_code?: string
-  first_accepted_user_id: unknown
-  created_at: string
-  updated_at: string
-}
+export type ConversationOperation = ApiConversationOperation
 
 export interface DraftSessionSnapshot {
   id: string
@@ -100,6 +88,15 @@ function isFieldValue(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 }
 
+export function fieldEvidence(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const entries = value.filter((entry): entry is string => typeof entry === 'string')
+    return entries.length ? entries.join('；') : undefined
+  }
+  return undefined
+}
+
 export function createDraftFields(values: Partial<EvaluationRequest> = {}): DraftFields {
   const fields = Object.fromEntries(
     WHOLE_MACHINE_FIELD_KEYS.map((key) => [key, { status: 'missing' }])
@@ -132,21 +129,21 @@ export function normalizeConversationDraft(input: UpstreamConversationDraft): Co
       }
       fields[key] = {
         status: 'range', min: field.range.min, max: field.range.max,
-        ...(typeof field.evidence === 'string' ? { evidence: field.evidence } : {}),
+        ...(fieldEvidence(field.evidence) ? { evidence: fieldEvidence(field.evidence) } : {}),
         ...(field.source ? { source: field.source as DraftField['source'] } : {})
       }
     } else if (field.state === 'candidate') {
       fields[key] = {
         status: 'candidate',
-        candidates: (field.candidates ?? []).map((candidate) => candidate.value as string | number),
-        ...(typeof field.evidence === 'string' ? { evidence: field.evidence } : {}),
+        candidates: (field.candidates ?? []).map((candidate) => candidate.value as string | number | boolean),
+        ...(fieldEvidence(field.evidence) ? { evidence: fieldEvidence(field.evidence) } : {}),
         ...(field.source ? { source: field.source as DraftField['source'] } : {})
       }
     } else {
       fields[key] = {
         status: field.state,
         ...(field.state === 'value' ? { value: field.value } : {}),
-        ...(typeof field.evidence === 'string' ? { evidence: field.evidence } : {}),
+        ...(fieldEvidence(field.evidence) ? { evidence: fieldEvidence(field.evidence) } : {}),
         ...(field.source ? { source: field.source as DraftField['source'] } : {})
       }
     }

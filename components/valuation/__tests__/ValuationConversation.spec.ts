@@ -101,6 +101,11 @@ const apiMock = {
     return upstreamDraft(serverVersion, serverFields)
   }),
   deleteConversationDraft: vi.fn(async () => ({ deleted: true })),
+  suggestConversationDraft: vi.fn(async (body: { operation_id: string }) => ({
+    id: `op:draft-1:${body.operation_id}`,
+    operation_id: `op:draft-1:${body.operation_id}`,
+    status: 'pending'
+  })),
   createConversationOperation: vi.fn(async (body: { operation_id: string; request: EvaluationRequest }) => ({
     id: body.operation_id,
     status: 'succeeded',
@@ -126,7 +131,12 @@ const apiMock = {
       decay_anchor: 0
     }
   })),
-  getConversationOperation: vi.fn(),
+  getConversationOperation: vi.fn(async (id: string) => id.startsWith('op:')
+    ? {
+        id, status: 'succeeded',
+        result: { schema_version: 1, patches: {}, supplements: {}, questions: [], draft_version: serverVersion }
+      }
+    : { id, status: 'succeeded' }),
   getEvaluation: vi.fn(),
   createConversationExplanation: vi.fn(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
     explanationReply(body)
@@ -223,6 +233,14 @@ describe('对话内联评估组件', () => {
     apiMock.createConversationExplanation.mockImplementation(async (body: { operation_id: string; card: ValuationExplanationCard }) =>
       explanationReply(body)
     )
+    apiMock.suggestConversationDraft.mockReset()
+    apiMock.suggestConversationDraft.mockImplementation(async (body: { operation_id: string }) => ({
+      id: `op:draft-1:${body.operation_id}`, operation_id: `op:draft-1:${body.operation_id}`, status: 'pending'
+    }))
+    apiMock.getConversationOperation.mockReset()
+    apiMock.getConversationOperation.mockImplementation(async (id: string) => id.startsWith('op:')
+      ? { id, status: 'succeeded', result: { schema_version: 1, patches: {}, supplements: {}, questions: [], draft_version: serverVersion } }
+      : { id, status: 'succeeded' })
     vi.clearAllMocks()
   })
 
@@ -248,11 +266,30 @@ describe('对话内联评估组件', () => {
     await flushPromises()
     expect(serverFields.usage_hours).toMatchObject({ status: 'value', value: 0 })
 
+    apiMock.getConversationOperation.mockResolvedValueOnce({
+      id: 'op:test', status: 'succeeded',
+      result: {
+        schema_version: 1,
+        patches: {
+          usage_hours: { state: 'value', value: 0 },
+          has_registration_certificate: { state: 'value', value: false }
+        },
+        supplements: {}, questions: [], draft_version: 3
+      }
+    })
     await wrapper.get('[data-test="message-input"]').setValue('0 小时，没有登记证')
     await wrapper.get('[data-test="message-form"]').trigger('submit')
     await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('[data-test="suggestion-review"]').exists()).toBe(true), { timeout: 3000 })
     expect(wrapper.text()).toContain('0 小时，没有登记证')
     expect(sessionStorage.getItem('hrwai:valuation-conversation:draft:v1')).not.toContain('没有登记证')
+    expect(apiMock.suggestConversationDraft).toHaveBeenCalledWith('draft-1', {
+      operation_id: expect.any(String), base_version: 3, text: '0 小时，没有登记证'
+    })
+    expect(serverFields.usage_hours).toMatchObject({ status: 'value', value: 0 })
+    expect(serverFields.has_registration_certificate).toMatchObject({ status: 'value', value: false })
+    expect((wrapper.get('[data-test="message-input"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-test="suggestion-review"]').text()).toContain('累计工时：0 小时')
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
 
     await wrapper.get('[data-test="toggle-draft"]').trigger('click')
@@ -356,6 +393,57 @@ describe('对话内联评估组件', () => {
     expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
   })
 
+  it('建议额度耗尽保留输入与草稿，可切手动且不再请求模型', async () => {
+    apiMock.suggestConversationDraft.mockRejectedValueOnce(Object.assign(new Error('额度耗尽'), { statusCode: 429 }))
+    const wrapper = await mountPage()
+    await wrapper.get('[data-test="message-input"]').setValue('第九次：0 小时')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+
+    expect((wrapper.get('[data-test="message-input"]').element as HTMLInputElement).value).toBe('第九次：0 小时')
+    expect(wrapper.get('[data-test="suggestion-status"]').text()).toContain('建议额度已耗尽')
+    expect(wrapper.get('[data-test="suggestion-quota"]').text()).toContain('估算剩余 0 / 8')
+    expect(wrapper.get('[data-test="draft-version"]').text()).toContain('1')
+    expect(wrapper.get('[data-test="suggestion-submit"]').attributes('disabled')).toBeDefined()
+
+    await openDraft(wrapper)
+    await wrapper.get('[data-test="usage_hours"]').setValue('0')
+    await flushPromises()
+    expect(serverFields.usage_hours).toMatchObject({ status: 'value', value: 0 })
+    expect(apiMock.suggestConversationDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('模型建议不自动触发参考试算，用户可主动按新草稿重算', async () => {
+    apiMock.getConversationOperation.mockResolvedValueOnce({
+      id: 'op:test', status: 'succeeded',
+      result: {
+        schema_version: 1,
+        patches: {
+          brand: { state: 'value', value: '林德' },
+          vehicle_type: { state: 'value', value: '电动平衡重式' },
+          tonnage: { state: 'value', value: 2 },
+          factory_year: { state: 'value', value: 2020 }
+        },
+        supplements: {}, questions: [], draft_version: 1
+      }
+    })
+    const wrapper = await mountPage(1, true)
+    await wrapper.get('[data-test="message-input"]').setValue('林德 2 吨 2020 年')
+    await wrapper.get('[data-test="message-form"]').trigger('submit')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('[data-test="suggestion-review"]').exists()).toBe(true), { timeout: 3000 })
+
+    expect(apiMock.estimateTrial).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="trial-card"]').exists()).toBe(false)
+    expect(apiMock.createConversationOperation).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-test="recalculate-trial"]').trigger('click')
+    await flushPromises()
+    expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(wrapper.find('[data-test="trial-card"]').exists()).toBe(true))
+    expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe('priced')
+  })
+
   it('试算默认关闭：完整草稿也不显示入口、不请求 FL', async () => {
     const wrapper = await mountPage()
     await loadDemo(wrapper)
@@ -368,7 +456,7 @@ describe('对话内联评估组件', () => {
   it('开启后首次达到最低输入即自动出卡，不生成正式记录或报告入口', async () => {
     const wrapper = await mountPage(1, true)
     await fillTrialMinimum(wrapper)
-    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(1))
 
     expect(apiMock.estimateTrial).toHaveBeenCalledWith(expect.objectContaining({
       brand: '林德',
@@ -395,7 +483,7 @@ describe('对话内联评估组件', () => {
     expect(apiMock.estimateTrial).not.toHaveBeenCalled()
 
     await wrapper.get('[data-test="factory_year"]').setValue('2020')
-    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(1))
     expect(wrapper.get('[data-test="trial-card"]').attributes('data-status')).toBe('priced')
   })
 
@@ -413,7 +501,7 @@ describe('对话内联评估组件', () => {
     await wrapper.get('[data-test="factory_year-min"]').setValue('2018')
     await wrapper.get('[data-test="factory_year-max"]').setValue('2020')
     await wrapper.get('[data-test="factory_year-save-range"]').trigger('click')
-    await vi.waitFor(() => expect(apiMock.estimateTrial).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(wrapper.findAll('[data-test="trial-card"]')).toHaveLength(1))
     expect(apiMock.estimateTrial.mock.calls[0]![0]).toMatchObject({
       factory_year_min: 2018,
       factory_year_max: 2020,

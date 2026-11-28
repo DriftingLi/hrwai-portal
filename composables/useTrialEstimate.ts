@@ -106,7 +106,7 @@ export function createTrialEstimateController(api: TrialEstimateApi, options: Tr
   let pendingRequests = 0
   let snapshotId = ''
 
-  async function updateDraft(draft: TrialDraft): Promise<void> {
+  async function updateDraft(draft: TrialDraft, auto = true): Promise<void> {
     latestDraft = cloneValue(draft)
     draftRevision += 1
     if (cards.value.length > 0) {
@@ -114,7 +114,7 @@ export function createTrialEstimateController(api: TrialEstimateApi, options: Tr
         card.stale ? card : Object.freeze({ ...card, stale: true })
       )
     }
-    if (!enabled || autoAttempted || !isTrialDraftReady(draft)) return
+    if (!auto || !enabled || autoAttempted || !isTrialDraftReady(draft)) return
     autoAttempted = true
     await recalculate()
   }

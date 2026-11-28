@@ -5,6 +5,7 @@ import {
   type UpstreamConversationDraft,
   type ValuationApi
 } from '~/api/valuation'
+import { createValuationSuggestionController } from '~/composables/useValuationSuggestions'
 import {
   DRAFT_IDLE_TIMEOUT_MS,
   DRAFT_SERVER_TOUCH_WINDOW_MS,
@@ -24,6 +25,7 @@ import {
 
 type ConversationApi = Pick<ValuationApi,
   | 'createConversationDraft'
+  | 'suggestConversationDraft'
   | 'getConversationDraft'
   | 'updateConversationDraft'
   | 'undoConversationDraft'
@@ -38,6 +40,7 @@ interface ControllerOptions {
   now?: () => number
   sleep?: (milliseconds: number) => Promise<void>
   newOperationId?: () => string
+  maxSuggestionPolls?: number
 }
 
 function browserStorage(): ControllerOptions['storage'] {
@@ -66,6 +69,23 @@ export function createValuationConversationController(api: ConversationApi, opti
   let mutationQueue: Promise<unknown> = Promise.resolve()
   let touchPromise: Promise<boolean> | null = null
   let pendingMutations = 0
+  const maxSuggestionPolls = options.maxSuggestionPolls ?? 60
+  const suggestions = createValuationSuggestionController({
+    draft,
+    api,
+    ensureDraft,
+    waitForMutations: () => mutationQueue.catch(() => undefined),
+    enqueue,
+    applyDraft,
+    onDraftChanged: () => {
+      operationId = ''
+      completedRecord = null
+      error.value = ''
+    },
+    newOperationId,
+    sleep,
+    maxSuggestionPolls
+  })
 
   const complete = computed(() => Boolean(draft.value && draftToEvaluationRequest(draft.value)))
   // 本地时钟只负责展示与调度；能否继续使用一律以服务端 expires_at 为准。
@@ -89,11 +109,17 @@ export function createValuationConversationController(api: ConversationApi, opti
     persist()
   }
 
+  function clearSuggestionReview() {
+    suggestions.clearReview()
+  }
+
   function clearLocal() {
     draft.value = null
     operationId = ''
     completedRecord = null
     confirmationPromise = null
+    clearSuggestionReview()
+    suggestions.reset()
     if (storage) clearDraftSession(storage)
   }
 
@@ -176,6 +202,7 @@ export function createValuationConversationController(api: ConversationApi, opti
   }
 
   async function patchFields(patch: Partial<DraftFields>, _evidence?: string): Promise<void> {
+    clearSuggestionReview()
     operationId = ''
     completedRecord = null
     const current = await ensureDraft()
@@ -212,7 +239,7 @@ export function createValuationConversationController(api: ConversationApi, opti
     await patchFields(patch, evidence)
   }
 
-  async function setDictionaryValue(key: DraftFieldKey, value: string | number, evidence = '用户从字典点选') {
+  async function setDictionaryValue(key: DraftFieldKey, value: string | number | boolean, evidence = '用户从字典点选') {
     await patchFields({ [key]: valueField(key, value, evidence, 'dictionary') }, evidence)
   }
 
@@ -231,15 +258,25 @@ export function createValuationConversationController(api: ConversationApi, opti
       const fieldKey = key as DraftFieldKey
       const field = draft.value!.fields[fieldKey]
       if (field.status !== 'candidate') continue
-      const preferred = field.candidates?.[0]
-      if (preferred !== undefined && options.includes(preferred)) {
-        patch[fieldKey] = valueField(fieldKey, preferred, '原值与新上游字典兼容，已重新核对', 'dictionary')
+      const compatible = field.candidates?.filter((candidate) =>
+        typeof candidate === 'string' || typeof candidate === 'number' ? options.includes(candidate) : false
+      ) ?? []
+      if (compatible.length === 1) {
+        patch[fieldKey] = valueField(fieldKey, compatible[0]!, '原值与新上游字典兼容，已重新核对', 'dictionary')
+      } else if (compatible.length > 1) {
+        patch[fieldKey] = { status: 'candidate', candidates: compatible, evidence: field.evidence, source: field.source }
+      } else if (field.candidates?.length || options.length) {
+        patch[fieldKey] = {
+          status: 'candidate', candidates: [...options],
+          evidence: '上级字段变化后按真实上游字典重新核对', source: 'dictionary'
+        }
       }
     }
     if (Object.keys(patch).length) await patchFields(patch, '上游字典变更后重新核对')
   }
 
   async function undo() {
+    clearSuggestionReview()
     await ensureDraft()
     await enqueue(async () => {
       const current = draft.value!
@@ -328,8 +365,18 @@ export function createValuationConversationController(api: ConversationApi, opti
 
   return {
     draft, loading, saving, confirming, error, canUndo, complete, expired,
+    suggesting: suggestions.suggesting,
+    suggestionStatus: suggestions.suggestionStatus,
+    suggestionError: suggestions.suggestionError,
+    suggestionErrorCode: suggestions.suggestionErrorCode,
+    suggestion: suggestions.suggestion,
+    acceptedSuggestions: suggestions.acceptedSuggestions,
+    suggestionRemaining: suggestions.suggestionRemaining,
+    quotaExhausted: suggestions.quotaExhausted,
     restore, touch, expireIfIdle, setField, setFields, setDictionaryValue,
     setUnknown, setRange, revalidateFields, undo, confirm, reset,
+    submitSuggestion: suggestions.submitSuggestion,
+    chooseSuggestionCandidate: suggestions.chooseSuggestionCandidate,
     getOperationId: () => operationId
   }
 }

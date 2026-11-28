@@ -17,18 +17,18 @@
 
     <p v-if="degraded" class="explanation-degraded" data-test="explanation-degraded" role="status">本次为降级答复；卡片与报告仍按原权限使用。</p>
 
-    <form class="composer" data-test="message-form" @submit.prevent="emit('submit')">
-      <label class="sr-only" for="conversation-message">叉车信息或问题</label>
+    <form v-if="selection" class="composer" data-test="message-form" @submit.prevent="emit('submit')">
+      <label class="sr-only" for="conversation-message">针对所选结果卡提问</label>
       <input
         id="conversation-message"
         :value="question"
         data-test="message-input"
         maxlength="500"
-        :placeholder="selection ? '例如：为什么区间较宽？改成 6200 小时会差多少？' : '描述车辆，或补充工时；当前版本请用下方草稿完成字段确认'"
+        placeholder="例如：为什么区间较宽？改成 6200 小时会差多少？"
         @input="emit('update:question', ($event.target as HTMLInputElement).value)"
       />
       <button type="submit" class="primary-button" :disabled="!question.trim() || loading">
-        {{ loading ? '解释中…' : selection ? '解释所选结果' : '发送' }}
+        {{ loading ? '解释中…' : '解释所选结果' }}
       </button>
     </form>
   </section>
