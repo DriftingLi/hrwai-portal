@@ -53,7 +53,8 @@
   let state;
   const fresh = () => ({
     draft: null, messages: [{role:"assistant", text:"说说你知道的叉车信息。品牌、吨位、年份或铭牌型号都可以先说。"}],
-    cards: [], selected: null, pane: "chat", revision: 0, manual: false, timeout: false, error: "", confirming: false
+    cards: [], selected: null, pane: "chat", revision: 0, manual: false, timeout: false, error: "",
+    confirming: false, draftExpanded: false
   });
   state = fresh();
 
@@ -169,15 +170,24 @@
       <div class="actions">${action("example","发送示例车辆")}${action("correct","更正为 6200 小时")}
         ${action("timeout",state.timeout ? "关闭模拟超时" : "模拟模型超时")}${state.error && state.draft ? action("edit-error","转手动编辑") : ""}</div>`;
   }
+  function inlineDraft() {
+    if (!state.draft) return "";
+    const {brand, tonnes, hours} = state.draft;
+    const label = state.draftExpanded ? "收起车辆草稿" : "查看或编辑车辆草稿";
+    return `<section class="card"><h2>车辆草稿</h2><p>${escapeHtml(brand)} ${tonnes} 吨 · ${hours} 小时</p>
+      <div class="actions"><button type="button" data-action="toggle-draft" aria-expanded="${state.draftExpanded}"
+        aria-controls="inline-draft">${label}</button></div></section>
+      <div id="inline-draft" ${state.draftExpanded ? "" : "hidden"}>${draftCard()}</div>`;
+  }
   function render() {
     document.getElementById("variant-label").textContent = variant + " · " + layouts[variant];
     const debug = `<details class="debug"><summary>查看原型状态</summary><pre>${escapeHtml(JSON.stringify({
       variant, revision:state.revision, draft:state.draft, selected:state.selected,
       cards:state.cards.map(card => ({id:card.id,kind:card.kind,revision:card.revision,hours:card.draft.hours})),
-      manual:state.manual, timeout:state.timeout
+      manual:state.manual, timeout:state.timeout, draftExpanded:state.draftExpanded
     }, null, 2))}</pre></details>`;
     if (variant === "A") {
-      app.innerHTML = `<div class="layout a stack">${conversation(true)}${state.draft ? draftCard() : ""}${composer()}${debug}</div>`;
+      app.innerHTML = `<div class="layout a stack">${conversation(true)}${inlineDraft()}${composer()}${debug}</div>`;
     } else if (variant === "B") {
       app.innerHTML = `<div class="layout b"><section class="stack">${conversation(false)}${composer()}${debug}</section>
         <aside class="stack sidebar" aria-label="车辆和结果">${draftCard()}${resultList()}</aside></div>`;
@@ -207,11 +217,12 @@
     if (name === "choose") choose();
     if (name === "timeout") { state.timeout = !state.timeout; if (!state.timeout) state.error = ""; }
     if (name === "manual") state.manual = !state.manual;
-    if (name === "edit-error") { state.manual = true; state.pane = "draft"; }
+    if (name === "toggle-draft") state.draftExpanded = !state.draftExpanded;
+    if (name === "edit-error") { state.manual = true; state.pane = "draft"; state.draftExpanded = true; }
     if (name === "confirm") state.confirming = true;
     if (name === "retry-trial") { addResult("trial"); state.pane = "results"; }
     if (name === "submit-formal" && document.getElementById("verify")?.checked) {
-      addResult("formal"); state.confirming = false; state.pane = "results";
+      addResult("formal"); state.confirming = false; state.pane = "results"; state.draftExpanded = false;
     }
     if (name.startsWith("pane-")) state.pane = name.slice(5);
     if (name.startsWith("view-") || name.startsWith("explain-")) {
@@ -220,6 +231,7 @@
       else { send("为什么这个结果是这样？"); state.pane = "chat"; }
     }
     render();
+    if (name === "toggle-draft") document.querySelector('[data-action="toggle-draft"]')?.focus();
     if (name.startsWith("view-")) document.querySelector(".card.selected")?.scrollIntoView({block:"nearest"});
   });
   document.addEventListener("change", event => {
