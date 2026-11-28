@@ -63,7 +63,7 @@
               <span>待确认候选：</span>
               <select :data-test="`${definition.key}-candidate`" :value="''" @change="emit('choose-dictionary', definition.key, $event)">
                 <option value="" disabled>选择候选</option>
-                <option v-for="candidate in field(definition.key).candidates" :key="candidate" :value="candidate">{{ candidate }}</option>
+                <option v-for="candidate in field(definition.key).candidates" :key="String(candidate)" :value="candidate">{{ candidate }}</option>
               </select>
             </div>
             <button type="button" class="unknown-button" :data-test="`${definition.key}-unknown`" :disabled="busy" @click="emit('mark-unknown', definition.key)">明确不知道</button>

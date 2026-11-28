@@ -28,6 +28,51 @@ export interface ConversationDraftPatch {
   supplemental?: Record<string, unknown>
 }
 
+export interface SuggestConversationDraftRequest {
+  operation_id: string
+  base_version: number
+  text: string
+}
+
+export interface ValuationSuggestionResult {
+  schema_version: number
+  patches: Partial<Record<keyof DraftFields, UpstreamDraftField>>
+  supplements: Record<string, string>
+  questions: string[]
+  draft_version: number
+}
+
+export interface UpstreamSuggestionOperation {
+  id: string
+  kind: 'suggestion'
+  operation_id: string
+  draft_id: string
+  base_version: number
+  status: 'pending' | 'succeeded' | 'failed' | 'stale'
+  error_code?: string
+  result?: ValuationSuggestionResult
+  first_accepted_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationOperation {
+  id: string
+  kind?: 'evaluation' | 'suggestion'
+  operation_id: string
+  draft_id: string
+  draft_version?: number
+  base_version?: number
+  status: 'pending' | 'succeeded' | 'failed' | 'stale'
+  error_code?: string
+  evaluation_id?: number
+  evaluation?: EvaluationRecord
+  result?: ValuationSuggestionResult
+  first_accepted_user_id: unknown
+  created_at: string
+  updated_at: string
+}
+
 export function draftFieldsToUpstream(fields: Partial<DraftFields>): ConversationDraftPatch['fields'] {
   return Object.fromEntries(Object.entries(fields).map(([key, field]) => {
     const common = {
@@ -124,12 +169,12 @@ export function valuationErrorStatus(error: unknown): number | null {
   return null
 }
 
-function unwrap<T>(payload: unknown): T {
+function unwrap<T>(payload: unknown, acceptedCodes: readonly number[] = [200]): T {
   const wrapped = payload as Wrapped<T> | null
   if (!wrapped || typeof wrapped !== 'object' || typeof wrapped.code !== 'number') {
     throw new ValuationApiError('估值接口响应格式错误')
   }
-  if (wrapped.code !== 200) {
+  if (!acceptedCodes.includes(wrapped.code)) {
     throw new ValuationApiError(wrapped.message || '估值接口请求失败', wrapped.code)
   }
   return wrapped.data
@@ -596,6 +641,11 @@ export function createValuationApi(fetcher: ValuationFetcher) {
       post<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts`, body),
     getConversationDraft: (id: string) =>
       get<UpstreamConversationDraft>(`${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`),
+    suggestConversationDraft: async (id: string, body: SuggestConversationDraftRequest) =>
+      unwrap<UpstreamSuggestionOperation>(await fetcher(
+        `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}/suggestions`,
+        { method: 'POST', body }
+      ), [200, 202]),
     updateConversationDraft: (id: string, body: Omit<ConversationDraftPatch, 'fields'> & { fields?: Partial<DraftFields> }) =>
       patch<UpstreamConversationDraft>(
         `${VALUATION_API_PREFIX}/conversation/drafts/${encodeURIComponent(id)}`,

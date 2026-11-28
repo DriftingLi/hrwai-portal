@@ -7,7 +7,7 @@ import {
 } from '~/utils/valuationConversation'
 import { createValuationConversationController } from '../useValuationConversation'
 import { normalizeConversationDraft } from '~/utils/valuationConversation'
-import type { UpstreamConversationDraft } from '~/api/valuation'
+import type { UpstreamConversationDraft, ValuationSuggestionResult } from '~/api/valuation'
 import { validateEvaluationForm } from '~/utils/valuationValidator'
 import { draftValues } from '~/utils/valuationConversation'
 
@@ -50,9 +50,10 @@ function draft(version = 1, fields: DraftFields = createDraftFields()): Conversa
   return normalizeConversationDraft(upstreamDraft(version, fields))
 }
 
-function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFields; now?: () => number } = {}) {
+function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFields; now?: () => number; maxSuggestionPolls?: number } = {}) {
   let version = options.restored?.version ?? 0
   let fields = options.fields ?? createDraftFields()
+  const history: DraftFields[] = []
   const api = {
     createConversationDraft: vi.fn(async () => {
       version = 1
@@ -61,6 +62,7 @@ function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFi
     getConversationDraft: vi.fn(async () => upstreamDraft(version, fields, options.now?.())),
     updateConversationDraft: vi.fn(async (_id: string, body: { base_version: number; fields: Partial<DraftFields> }) => {
       if (body.base_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
+      history.push(fields)
       version += 1
       fields = { ...fields, ...body.fields }
       return upstreamDraft(version, fields, options.now?.())
@@ -68,20 +70,30 @@ function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFi
     undoConversationDraft: vi.fn(async (_id: string, body: { base_version: number }) => {
       if (body.base_version !== version) throw Object.assign(new Error('版本冲突'), { statusCode: 409 })
       version += 1
-      fields = { ...fields, usage_hours: { status: 'value', value: 4800 } }
+      fields = history.pop() ?? fields
       return { ...upstreamDraft(version, fields, options.now?.()), can_undo: false }
     }),
     deleteConversationDraft: vi.fn(async () => ({ deleted: true })),
+    suggestConversationDraft: vi.fn(async (_id: string, body: { operation_id: string }) => ({
+      id: `op:draft-1:${body.operation_id}`,
+      operation_id: `op:draft-1:${body.operation_id}`,
+      status: 'pending' as const
+    })),
     createConversationOperation: vi.fn(async (body: { operation_id: string; request: EvaluationRequest }) => ({
       id: body.operation_id,
       status: 'succeeded' as const,
       evaluation: { ...body.request, id: 88 }
     })),
-    getConversationOperation: vi.fn(async (id: string) => ({
-      id,
-      status: 'succeeded' as const,
-      evaluation: { ...completeValues, id: 88 }
-    }))
+    getConversationOperation: vi.fn(async (id: string) => id.startsWith('op:')
+      ? {
+          id, status: 'succeeded' as const,
+          result: { schema_version: 1, patches: {}, supplements: {}, questions: [], draft_version: version }
+        }
+      : {
+          id,
+          status: 'succeeded' as const,
+          evaluation: { ...completeValues, id: 88 }
+        })
   }
   const storage = new Map<string, string>()
   let operationSequence = 0
@@ -93,6 +105,7 @@ function setup(options: { restored?: UpstreamConversationDraft; fields?: DraftFi
     },
     sleep: async () => {},
     now: options.now ?? Date.now,
+    maxSuggestionPolls: options.maxSuggestionPolls,
     newOperationId: () => `operation-${++operationSequence}`
   })
   return { api, controller, storage }
@@ -236,5 +249,160 @@ describe('对话草稿控制器', () => {
     expect(controller.draft.value).toBeNull()
     expect(storage.size).toBe(0)
     expect(controller.expireIfIdle()).toBe(false)
+  })
+
+  it('一句话多项建议只预填明确值，并原样保留 0 与 false', async () => {
+    const { api, controller } = setup()
+    const result: ValuationSuggestionResult = {
+      schema_version: 1,
+      patches: {
+        tonnage: { state: 'value', value: 3.5 },
+        usage_hours: { state: 'value', value: 0 },
+        has_registration_certificate: { state: 'value', value: false }
+      },
+      supplements: { usage_hours: '仪表显示 0 小时' },
+      questions: ['是否有保养记录？'],
+      draft_version: 2
+    }
+    api.getConversationOperation.mockResolvedValueOnce({ id: 'op:test', status: 'succeeded', result } as never)
+    await controller.restore()
+
+    await expect(controller.submitSuggestion('3.5 吨，0 小时，没有登记证')).resolves.toBe(true)
+    expect(api.suggestConversationDraft).toHaveBeenCalledWith('draft-1', {
+      operation_id: expect.any(String), base_version: 1, text: '3.5 吨，0 小时，没有登记证'
+    })
+    expect(api.getConversationOperation).toHaveBeenCalledWith(expect.stringContaining('op:draft-1:'))
+    expect(api.updateConversationDraft).toHaveBeenCalledWith('draft-1', expect.objectContaining({
+      base_version: 1,
+      fields: expect.objectContaining({
+        tonnage: expect.objectContaining({ status: 'value', value: 3.5 }),
+        usage_hours: expect.objectContaining({ status: 'value', value: 0 }),
+        has_registration_certificate: expect.objectContaining({ status: 'value', value: false })
+      })
+    }))
+    expect(controller.suggestion.value).toMatchObject({ supplements: { usage_hours: '仪表显示 0 小时' }, questions: ['是否有保养记录？'] })
+    expect(api.createConversationOperation).not.toHaveBeenCalled()
+  })
+
+  it('候选冲突展示真实目录候选，点选后才写入且不占建议额度', async () => {
+    const { api, controller } = setup({ fields: createDraftFields({ ...completeValues, tonnage: 3 }) })
+    const result: ValuationSuggestionResult = {
+      schema_version: 1,
+      patches: {
+        tonnage: {
+          state: 'candidate',
+          candidates: [
+            { id: 'tonnage:3', label: '3 吨', value: 3, source: 'user' },
+            { id: 'tonnage:3.5', label: '3.5 吨', value: 3.5, source: 'dictionary' }
+          ]
+        }
+      },
+      supplements: {}, questions: [], draft_version: 2
+    }
+    api.getConversationOperation.mockResolvedValueOnce({ id: 'op:test', status: 'succeeded', result } as never)
+    await controller.restore()
+    await controller.submitSuggestion('也许 3.5 吨')
+    expect(api.updateConversationDraft).not.toHaveBeenCalled()
+    expect(controller.draft.value?.fields.tonnage).toMatchObject({ status: 'value', value: 3 })
+    expect(controller.suggestion.value?.patches.tonnage?.candidates).toHaveLength(2)
+
+    const accepted = controller.acceptedSuggestions.value
+    await controller.chooseSuggestionCandidate('tonnage', 3.5)
+    expect(controller.draft.value?.fields.tonnage).toMatchObject({ status: 'value', value: 3.5 })
+    expect(controller.draft.value?.fields.config_type).toMatchObject({ status: 'candidate', candidates: ['标准'] })
+    expect(controller.suggestion.value).toBeNull()
+    expect(controller.acceptedSuggestions.value).toBe(accepted)
+    expect(api.suggestConversationDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('吨位 3 改 3.5 时把未提供的旧下游配置降为候选，不伪造兼容', async () => {
+    const { api, controller } = setup({ fields: createDraftFields({ ...completeValues, tonnage: 3, config_type: '3 吨配置' }) })
+    api.getConversationOperation.mockResolvedValueOnce({
+      id: 'op:test', status: 'succeeded',
+      result: { schema_version: 1, patches: { tonnage: { state: 'value', value: 3.5 } }, supplements: {}, questions: [], draft_version: 2 }
+    } as never)
+    await controller.restore()
+    await controller.submitSuggestion('改成 3.5 吨')
+
+    expect(controller.draft.value?.fields.tonnage).toMatchObject({ status: 'value', value: 3.5 })
+    expect(controller.draft.value?.fields.config_type).toMatchObject({ status: 'candidate', candidates: ['3 吨配置'] })
+    expect(controller.complete.value).toBe(false)
+  })
+
+  it('晚到的 succeeded 响应在草稿已变化时丢弃，不覆盖手动编辑', async () => {
+    const { api, controller } = setup()
+    let release!: () => void
+    api.getConversationOperation.mockImplementationOnce(() => new Promise((resolve) => {
+      release = () => resolve({
+        id: 'op:test', status: 'succeeded',
+        result: { schema_version: 1, patches: { usage_hours: { state: 'value', value: 0 } }, supplements: {}, questions: [], draft_version: 2 }
+      } as never)
+    }))
+    await controller.restore()
+    const pending = controller.submitSuggestion('0 小时')
+    await vi.waitFor(() => expect(api.getConversationOperation).toHaveBeenCalled())
+    await controller.setField('usage_hours', 1234, '用户手动修改')
+    release()
+
+    await expect(pending).resolves.toBe(false)
+    expect(controller.draft.value?.fields.usage_hours).toMatchObject({ status: 'value', value: 1234 })
+    expect(controller.suggestionStatus.value).toBe('stale')
+    expect(controller.suggestion.value).toBeNull()
+    expect(api.updateConversationDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('建议网络重试复用同一 operation_id，不重复计算页面受理次数', async () => {
+    const { api, controller } = setup()
+    api.suggestConversationDraft.mockRejectedValueOnce(new Error('network disconnected'))
+    await controller.restore()
+
+    await expect(controller.submitSuggestion('0 小时')).resolves.toBe(false)
+    await expect(controller.submitSuggestion('0 小时')).resolves.toBe(true)
+    expect(api.suggestConversationDraft).toHaveBeenCalledTimes(2)
+    expect(api.suggestConversationDraft.mock.calls[1]![1].operation_id).toBe(api.suggestConversationDraft.mock.calls[0]![1].operation_id)
+    expect(controller.acceptedSuggestions.value).toBe(1)
+  })
+
+  it('第九次建议被 429 拒绝时保留草稿并锁住模型入口，手动仍可修改', async () => {
+    const { api, controller } = setup()
+    await controller.restore()
+    for (let index = 0; index < 8; index += 1) await controller.submitSuggestion(`第 ${index + 1} 次`)
+    api.suggestConversationDraft.mockRejectedValueOnce(Object.assign(new Error('草稿建议额度已耗尽'), { statusCode: 429 }))
+
+    await expect(controller.submitSuggestion('第九次')).resolves.toBe(false)
+    expect(controller.suggestionErrorCode.value).toBe('suggestion_quota_exceeded')
+    expect(controller.quotaExhausted.value).toBe(true)
+    expect(controller.suggestionRemaining.value).toBe(0)
+    expect(controller.draft.value?.version).toBe(1)
+    await controller.setField('usage_hours', 0)
+    expect(controller.draft.value?.fields.usage_hours).toMatchObject({ status: 'value', value: 0 })
+  })
+
+  it('轮询超时保留草稿与输入错误状态，随后可继续手动填写', async () => {
+    const { api, controller } = setup({ maxSuggestionPolls: 1 })
+    api.getConversationOperation.mockResolvedValue({ id: 'op:test', status: 'pending' } as never)
+    await controller.restore()
+
+    await expect(controller.submitSuggestion('帮我整理')).resolves.toBe(false)
+    expect(controller.suggestionErrorCode.value).toBe('suggestion_timeout')
+    expect(controller.suggestionStatus.value).toBe('failed')
+    expect(controller.draft.value?.version).toBe(1)
+    await controller.setField('has_registration_certificate', false)
+    expect(controller.draft.value?.fields.has_registration_certificate).toMatchObject({ status: 'value', value: false })
+  })
+
+  it('撤回建议预填后清空候选复核并恢复上一版', async () => {
+    const { api, controller } = setup()
+    api.getConversationOperation.mockResolvedValueOnce({
+      id: 'op:test', status: 'succeeded',
+      result: { schema_version: 1, patches: { usage_hours: { state: 'value', value: 0 } }, supplements: {}, questions: [], draft_version: 2 }
+    } as never)
+    await controller.restore()
+    await controller.submitSuggestion('0 小时')
+    expect(controller.draft.value?.fields.usage_hours).toMatchObject({ status: 'value', value: 0 })
+
+    await controller.undo()
+    expect(controller.draft.value?.fields.usage_hours.status).toBe('missing')
+    expect(controller.suggestion.value).toBeNull()
   })
 })

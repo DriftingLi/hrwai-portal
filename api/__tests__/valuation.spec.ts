@@ -218,6 +218,21 @@ describe('对话草稿端点路径', () => {
     ])
   })
 
+  it('建议提交使用 FL 的 operation_id/base_version/text，并接受 202 信封', async () => {
+    const operation = {
+      id: 'op:draft-1:suggestion-1', kind: 'suggestion', operation_id: 'op:draft-1:suggestion-1',
+      draft_id: 'draft-1', base_version: 2, status: 'pending'
+    }
+    const { api, calls } = setup(() => ({ code: 202, message: 'accepted', data: operation }))
+    const body = { operation_id: 'suggestion-1', base_version: 2, text: '3.5 吨，0 小时，没有登记证' }
+
+    await expect(api.suggestConversationDraft('draft-1', body)).resolves.toEqual(operation)
+    expect(calls).toEqual([{
+      path: '/api/valuation/conversation/drafts/draft-1/suggestions',
+      init: { method: 'POST', body }
+    }])
+  })
+
   it('DELETE 204 无响应体也是成功，不套用 JSON 信封解包', async () => {
     const { api } = setup(() => undefined)
     await expect(api.deleteConversationDraft('draft-1')).resolves.toBeUndefined()

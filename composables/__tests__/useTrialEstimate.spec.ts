@@ -89,6 +89,18 @@ describe('useTrialEstimate 状态控制器', () => {
     })
   })
 
+  it('模型建议投影只更新草稿快照，不自动试算；用户主动重算仍可用', async () => {
+    const api = { estimateTrial: vi.fn(async () => priced()) }
+    const controller = createTrialEstimateController(api, { enabled: true, newRequestId: () => 'trial-manual' })
+
+    await controller.updateDraft(draft, false)
+    expect(api.estimateTrial).not.toHaveBeenCalled()
+    expect(controller.cards.value).toEqual([])
+
+    await controller.recalculate()
+    expect(api.estimateTrial).toHaveBeenCalledWith({ ...draft, request_id: 'trial-manual', policy: 'demo' })
+  })
+
   it('修改只标旧卡 stale；主动重算追加不可变新卡并保留旧快照', async () => {
     const api = {
       estimateTrial: vi

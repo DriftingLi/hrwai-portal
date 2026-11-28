@@ -2,6 +2,19 @@
   <div class="conversation-layout">
     <ValuationTimeline :entries="timeline.entries.value" :load-error="loadError" :expired-notice="expiredNotice" />
 
+    <section v-if="controller.suggestionStatus.value !== 'idle'" class="suggestion-status" data-test="suggestion-status" :data-status="controller.suggestionStatus.value" aria-live="polite">
+      <p v-if="controller.suggesting.value">正在整理描述并等待结构化建议；此时仍可展开草稿手动修改，晚到的结果不会覆盖新版本。</p>
+      <p v-else-if="controller.suggestionStatus.value === 'succeeded'">建议已应用到当前版本。候选必须由你点选，手动修改与点选都不占建议额度。</p>
+      <p v-else-if="controller.suggestionStatus.value === 'stale'">{{ controller.suggestionError.value }}</p>
+      <p v-else class="notice error-notice" role="alert">{{ controller.suggestionError.value }}</p>
+    </section>
+    <ValuationSuggestionReview
+      v-if="controller.suggestion.value"
+      :result="controller.suggestion.value"
+      :busy="saving"
+      @choose="chooseSuggestionCandidate"
+    />
+
     <section v-if="trialEnabled" class="trial-results" aria-labelledby="trial-results-title" data-test="trial-results">
       <header class="trial-results-head">
         <div>
@@ -75,12 +88,15 @@
       </ValuationDraftEditor>
     </section>
 
-    <form class="composer" data-test="message-form" @submit.prevent="timeline.sendMessage">
-      <label class="sr-only" for="conversation-message">叉车信息或问题</label>
-      <input id="conversation-message" v-model="timeline.messageText.value" data-test="message-input" placeholder="描述车辆，或补充工时；当前版本请用下方草稿完成字段确认" />
-      <button type="submit" class="primary-button" :disabled="!timeline.messageText.value.trim()">发送</button>
+    <form class="composer" data-test="message-form" @submit.prevent="timeline.sendMessage(submitSuggestion)">
+      <label class="sr-only" for="conversation-message">用一句话描述叉车信息</label>
+      <input id="conversation-message" v-model="timeline.messageText.value" data-test="message-input" maxlength="4000" placeholder="例如：林德 3.5 吨，0 小时，没有登记证" />
+      <button type="submit" class="primary-button" data-test="suggestion-submit" :disabled="!timeline.messageText.value.trim() || controller.suggesting.value || controller.quotaExhausted.value">
+        {{ controller.suggesting.value ? '整理中…' : '让 AI 整理' }}
+      </button>
     </form>
-    <p class="memory-note">消息与结果卡仅保留在当前页面；刷新只恢复未过期的草稿与字段依据。</p>
+    <p class="quota-note" data-test="suggestion-quota">本页已受理 {{ controller.acceptedSuggestions.value }} 次 · 估算剩余 {{ controller.suggestionRemaining.value }} / 8（服务端为准；手动填写与候选点选不占额度）</p>
+    <p class="memory-note">模型不可用、校验失败或超时时，输入与草稿都会保留，可继续手动填写。建议不会自动正式评估、参考试算、改价或存档。</p>
   </div>
 </template>
 
@@ -121,9 +137,10 @@ const review = useConversationReview(draft, complete, () => controller.touch())
 const trial = useTrialEstimate({ enabled: props.trialEnabled, policy: props.trialPolicy })
 const trialDraft = computed(() => draftFieldsToTrial(fields.value))
 const trialReady = computed(() => isTrialDraftReady(trialDraft.value))
+const applyingSuggestion = ref(false)
 watch(fields, (value) => {
-  void trial.updateDraft(draftFieldsToTrial(value))
-}, { deep: true, immediate: true })
+  void trial.updateDraft(draftFieldsToTrial(value), !applyingSuggestion.value)
+}, { deep: true, immediate: true, flush: 'sync' })
 const draftExpanded = ref(false)
 const loadError = ref('')
 const actionError = ref('')
@@ -162,6 +179,25 @@ async function markUnknown(key: DraftFieldKey) {
 }
 async function saveRange(key: DraftFieldKey, min: number, max: number) {
   await guarded(() => controller.setRange(key, min, max, key === 'factory_year' ? '用户提供出厂年份范围' : '用户提供工时范围'))
+}
+async function submitSuggestion(text: string) {
+  applyingSuggestion.value = true
+  try {
+    const applied = await controller.submitSuggestion(text)
+    if (applied) dictionaries.refresh()
+    return applied
+  } finally {
+    applyingSuggestion.value = false
+  }
+}
+async function chooseSuggestionCandidate(key: DraftFieldKey, value: string | number | boolean) {
+  applyingSuggestion.value = true
+  try {
+    await guarded(() => controller.chooseSuggestionCandidate(key, value))
+    dictionaries.refreshAfterChange(key)
+  } finally {
+    applyingSuggestion.value = false
+  }
 }
 async function loadDemo() {
   await guarded(async () => {
