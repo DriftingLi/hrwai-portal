@@ -1,0 +1,253 @@
+<!doctype html>
+<!-- Throwaway prototype near /valuation. Open this file directly; A/B/C share one mock flow and URL. -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>整机残值评估 · 交互原型</title>
+<style>
+  :root{color-scheme:light;--ink:#142932;--muted:#52646d;--line:#cbd7db;--accent:#005f59;--soft:#e6f4f0;--paper:#fff;--page:#f0f4f4;font:16px/1.55 system-ui,"Microsoft YaHei",sans-serif}
+  *{box-sizing:border-box} body{margin:0;background:var(--page);color:var(--ink);padding-bottom:76px}
+  h1,h2,h3,p{margin:0} h1{font-size:1.3rem} h2{font-size:1.13rem} h3{font-size:1rem}
+  button,input{font:inherit} button{border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:.45rem .75rem;border-radius:7px;cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff} button:disabled{opacity:.55;cursor:default}
+  button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid #08665f;outline-offset:3px}
+  .top{background:#12333a;color:#fff;padding:16px max(16px,calc((100% - 1080px)/2));display:flex;justify-content:space-between;gap:12px;align-items:center}
+  .top small{display:block;color:#d3e4e5} .top button{white-space:nowrap}
+  main{max-width:1120px;margin:24px auto;padding:0 14px}
+  .stack{display:grid;gap:12px;min-width:0;align-content:start}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr)}
+  .layout.a{max-width:740px;margin:auto}
+  .layout.b{grid-template-columns:minmax(0,1.48fr) minmax(0,1fr);gap:16px}.sidebar{position:sticky;top:12px}
+  .layout.c{max-width:880px;margin:auto}.tabs{display:flex;gap:8px;flex-wrap:wrap}.tabs [aria-pressed=true]{background:var(--soft);border-color:var(--accent)}
+  .card,.bubble,.composer{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:15px;min-width:0;overflow-wrap:anywhere}
+  .card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .bubble{width:fit-content;max-width:96%}.bubble.user{justify-self:end;background:var(--soft)}
+  .bubble small,.eyebrow,.muted{color:var(--muted);display:block}
+  .bubble p,.card p{margin-top:4px}.price{display:block;font-size:1.65rem;color:var(--accent);font-weight:750}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.actions button{max-width:100%}
+  dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px;margin:10px 0}
+  dd{margin:0;font-weight:600} dt{color:var(--muted)} details{margin-top:10px} summary{cursor:pointer}
+  .composer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.composer input,.edit input{width:100%;min-width:0;border:1px solid var(--line);color:inherit;border-radius:7px;padding:8px}
+  .edit{display:grid;gap:8px;margin-top:8px}.edit label{display:grid;gap:2px}.error{color:#913111}
+  .switcher{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#142932;color:#fff;padding:6px;border-radius:12px;box-shadow:0 2px 14px #14293240;white-space:nowrap;z-index:1}
+  .switcher button{padding:.24rem .55rem}.debug pre{overflow:auto;background:#fff;padding:10px;font-size:.8rem} progress{width:100%}
+  @media(max-width:720px){main{margin-top:12px}.layout.b{grid-template-columns:minmax(0,1fr)}.sidebar{position:static}.top{align-items:start}.top small{max-width:25ch}}
+</style>
+</head>
+<body>
+<header class="top"><div><h1>整机残值评估</h1><small>交互原型 · 示例数据 · 不提交真实评估</small></div><button type="button" data-action="reset">重置示例</button></header>
+<main id="app"></main>
+<nav class="switcher" aria-label="原型布局切换">
+  <button type="button" aria-label="上一种布局" data-action="previous">←</button>
+  <span id="variant-label"></span>
+  <button type="button" aria-label="下一种布局" data-action="next">→</button>
+</nav>
+<script>
+  const layouts = { A: "对话内联", B: "对话＋侧栏", C: "会话／草稿／结果分区" };
+  const variants = Object.keys(layouts);
+  const requested = new URL(location.href).searchParams.get("variant");
+  let variant = variants.includes(requested) ? requested : "A";
+  const example = "2021 年合力 3 吨柴油叉车，在苏州，用了 4800 小时，车况还行。";
+  const app = document.getElementById("app");
+  let state;
+  const fresh = () => ({
+    draft: null, messages: [{role:"assistant", text:"说说你知道的叉车信息。品牌、吨位、年份或铭牌型号都可以先说。"}],
+    cards: [], selected: null, pane: "chat", revision: 0, manual: false, timeout: false, error: "", confirming: false
+  });
+  state = fresh();
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    })[char]);
+  }
+  const action = (id, label, primary = false) =>
+    `<button type="button" data-action="${id}" class="${primary ? "primary" : ""}">${label}</button>`;
+  function assistant(text) { state.messages.push({role:"assistant", text}); }
+  function changeDraft(fields) {
+    state.draft = {...state.draft, ...fields};
+    state.revision += 1;
+    state.confirming = false;
+    state.error = "";
+  }
+  function addResult(kind) {
+    const same = state.cards.find(card => card.kind === kind && card.revision === state.revision);
+    if (same) { state.selected = same.id; return; }
+    const draft = {...state.draft};
+    const base = draft.hours >= 6000 ? 30400 : 33600;
+    const card = {id:state.cards.length + 1, kind, revision:state.revision, draft,
+      low:kind === "trial" ? base - 3200 : base - 3000, high:kind === "trial" ? base + 5200 : base + 3000,
+      point:kind === "formal" ? base : null};
+    state.cards.push(card);
+    state.messages.push({cardId:card.id});
+    state.selected = card.id;
+  }
+  function send(text) {
+    const message = text.trim();
+    if (!message) return;
+    state.messages.push({role:"user",text:message});
+    if (state.timeout) {
+      state.error = "模拟模型超时。原始输入已保留，可以继续手动编辑草稿。";
+      return;
+    }
+    if (!state.draft && /合力|柴油|4800/.test(message)) {
+      changeDraft({brand:"合力", vehicle:"内燃平衡重式", tonnes:3, year:2021, city:"江苏苏州",
+        hours:4800, condition:"待确认", configuration:"待确认", evidence:message});
+      assistant("已填好车辆和工时。试算覆盖目录候选。你知道配置或车况的话，可以继续补充。");
+      addResult("trial");
+    } else if (state.draft && /6000|6200/.test(message)) {
+      changeDraft({hours:Number(message.match(/6000|6200/)[0]), evidence:message});
+      assistant("已更新工时。此前的结果保留，可以重新试算。");
+    } else if (state.draft && /区间|为什么/.test(message) && state.selected) {
+      const card = state.cards.find(item => item.id === state.selected);
+      assistant(card.kind === "trial"
+        ? `试算 ${card.id} 使用了 ${card.draft.hours} 小时的输入，区间覆盖目录配置与车况情景。`
+        : `正式评估 ${card.id} 采用确认时的 ${card.draft.hours} 小时与 ${card.draft.condition} 级车况。`);
+    } else {
+      assistant("原型支持示例车辆、6000／6200 小时纠错，以及「为什么区间这么宽」。");
+    }
+  }
+  function choose() {
+    changeDraft({configuration:"K1 · 手波／国产发动机 · 两级标准门架 3 米", condition:"B"});
+    assistant("已选定示例配置和 B 级车况。原厂漆、证件和维保状态仍需确认。");
+  }
+  const money = value => (value / 10000).toFixed(2);
+  function fields(draft) {
+    return `<dl><dt>车辆</dt><dd>${escapeHtml(draft.brand)} ${escapeHtml(draft.tonnes)} 吨</dd>
+      <dt>车型</dt><dd>${escapeHtml(draft.vehicle)}</dd><dt>出厂年份</dt><dd>${escapeHtml(draft.year)}</dd>
+      <dt>累计工时</dt><dd>${escapeHtml(draft.hours)} 小时</dd><dt>区域</dt><dd>${escapeHtml(draft.city)}</dd>
+      <dt>配置</dt><dd>${escapeHtml(draft.configuration)}</dd><dt>车况</dt><dd>${escapeHtml(draft.condition)}</dd></dl>`;
+  }
+  function draftCard() {
+    const draft = state.draft;
+    if (!draft) return `<section class="card"><h2>车辆草稿</h2><p class="muted">填写第一条车辆描述后显示。</p></section>`;
+    const ready = draft.configuration !== "待确认";
+    return `<section class="card" id="draft"><h2>${state.manual ? "手动编辑草稿" : "车辆确认卡"}</h2>${fields(draft)}
+      ${state.error ? `<p class="error" role="status">${escapeHtml(state.error)}</p>` : ""}
+      ${draft.evidence ? `<details><summary>最近一次字段依据</summary><p>${escapeHtml(draft.evidence)}</p></details>` : ""}
+      ${state.manual ? `<form class="edit" id="edit"><label>累计工时<input name="hours" type="number" min="0" required value="${draft.hours}"></label>
+        <label>所在城市<input name="city" required value="${escapeHtml(draft.city)}"></label><button class="primary">保存修改</button></form>` : ""}
+      ${state.confirming ? `<p>请确认估价年份为当年、原厂漆、车牌、登记证和维保记录均为「有」（示例）。</p>
+        <label><input type="checkbox" id="verify"> 我已核对全部车辆信息</label>` : ""}
+      <div class="actions">${!ready ? action("choose", "选 K1 配置和 B 级车况", true) : ""}
+        ${state.confirming ? '<button type="button" class="primary" data-action="submit-formal" disabled>确认并评估</button>'
+        : ready ? action("confirm", "核对并评估", true) : ""}
+        ${state.cards.some(card => card.revision !== state.revision) ? action("retry-trial", "重新试算") : ""}
+        ${action("manual",state.manual ? "收起手动编辑" : "手动编辑")}</div></section>`;
+  }
+  function resultCard(card) {
+    const formal = card.kind === "formal";
+    const selected = state.selected === card.id;
+    return `<section class="card ${selected ? "selected" : ""}" aria-label="${formal ? "正式评估" : "参考试算"} ${card.id}">
+      <span class="eyebrow">${formal ? "正式评估" : "参考试算"} · 示例 ${card.id}</span>
+      <h2>${escapeHtml(card.draft.brand)} ${card.draft.tonnes} 吨 · ${card.draft.hours} 小时</h2>
+      <strong class="price">${formal ? money(card.point) : money(card.low) + "–" + money(card.high)} 万元</strong>
+      <p>${formal ? `置信区间 ${money(card.low)}–${money(card.high)} 万元` : "区间覆盖所用目录配置和车况情景。"}</p>
+      <div class="actions">${action("explain-" + card.id, selected ? "解释这张结果" : "选中并解释")}</div>
+      <details><summary>查看评估时的车辆信息${formal ? "与图表" : "与试算依据"}</summary>
+        ${fields(card.draft)}
+        ${formal ? '<p>维度评分示例</p><label>车况 <progress value="76" max="100"></progress></label><details><summary>预览报告入口</summary><p>正式版本从后端获取 PDF。此处为交互占位。</p></details>'
+        : "<p>依据：示例原价目录、使用工时及车况情景。</p>"}</details></section>`;
+  }
+  function conversation(inline) {
+    return state.messages.map(message => {
+      if (message.cardId) {
+        const card = state.cards.find(item => item.id === message.cardId);
+        return inline ? resultCard(card)
+          : `<div class="bubble"><p>${card.kind === "formal" ? "正式评估已生成" : "参考试算已生成"}</p>${action("view-" + card.id,"查看结果 " + card.id)}</div>`;
+      }
+      return `<div class="bubble ${message.role}"><small>${message.role === "user" ? "你" : "估值助手"}</small><p>${escapeHtml(message.text)}</p></div>`;
+    }).join("");
+  }
+  function resultList() {
+    return state.cards.map(resultCard).join("") || '<section class="card"><p class="muted">完成试算或正式评估后显示结果。</p></section>';
+  }
+  function composer() {
+    const status = state.error ? `<p class="card error" role="status">${escapeHtml(state.error)}</p>` : "";
+    return `${status}<form id="chat" class="composer"><input name="message" aria-label="叉车信息或问题" placeholder="描述车辆，或补充工时"><button class="primary">发送</button></form>
+      <div class="actions">${action("example","发送示例车辆")}${action("correct","更正为 6200 小时")}
+        ${action("timeout",state.timeout ? "关闭模拟超时" : "模拟模型超时")}${state.error && state.draft ? action("edit-error","转手动编辑") : ""}</div>`;
+  }
+  function render() {
+    document.getElementById("variant-label").textContent = variant + " · " + layouts[variant];
+    const debug = `<details class="debug"><summary>查看原型状态</summary><pre>${escapeHtml(JSON.stringify({
+      variant, revision:state.revision, draft:state.draft, selected:state.selected,
+      cards:state.cards.map(card => ({id:card.id,kind:card.kind,revision:card.revision,hours:card.draft.hours})),
+      manual:state.manual, timeout:state.timeout
+    }, null, 2))}</pre></details>`;
+    if (variant === "A") {
+      app.innerHTML = `<div class="layout a stack">${conversation(true)}${state.draft ? draftCard() : ""}${composer()}${debug}</div>`;
+    } else if (variant === "B") {
+      app.innerHTML = `<div class="layout b"><section class="stack">${conversation(false)}${composer()}${debug}</section>
+        <aside class="stack sidebar" aria-label="车辆和结果">${draftCard()}${resultList()}</aside></div>`;
+    } else {
+      const tabs = [["chat","对话"],["draft","车辆草稿"],["results","结果（" + state.cards.length + "）"]];
+      const panel = state.pane === "chat" ? conversation(false) + composer() : state.pane === "draft" ? draftCard() : resultList();
+      app.innerHTML = `<div class="layout c stack"><nav class="tabs" aria-label="评估区">
+        ${tabs.map(([key,label]) => `<button type="button" data-action="pane-${key}" aria-pressed="${state.pane === key}">${label}</button>`).join("")}
+      </nav><div class="stack">${panel}</div>${debug}</div>`;
+    }
+  }
+  function switchVariant(step) {
+    variant = variants[(variants.indexOf(variant) + step + variants.length) % variants.length];
+    const url = new URL(location.href);
+    url.searchParams.set("variant", variant);
+    try { history.replaceState(null, "", url); } catch { /* local-file browsers may constrain navigation */ }
+    render();
+  }
+  document.addEventListener("click", event => {
+    const control = event.target.closest("button[data-action]");
+    if (!control) return;
+    const name = control.dataset.action;
+    if (name === "previous" || name === "next") return switchVariant(name === "next" ? 1 : -1);
+    if (name === "reset") state = fresh();
+    if (name === "example") send(example);
+    if (name === "correct") send("工时看错了，其实是 6200 小时。");
+    if (name === "choose") choose();
+    if (name === "timeout") { state.timeout = !state.timeout; if (!state.timeout) state.error = ""; }
+    if (name === "manual") state.manual = !state.manual;
+    if (name === "edit-error") { state.manual = true; state.pane = "draft"; }
+    if (name === "confirm") state.confirming = true;
+    if (name === "retry-trial") { addResult("trial"); state.pane = "results"; }
+    if (name === "submit-formal" && document.getElementById("verify")?.checked) {
+      addResult("formal"); state.confirming = false; state.pane = "results";
+    }
+    if (name.startsWith("pane-")) state.pane = name.slice(5);
+    if (name.startsWith("view-") || name.startsWith("explain-")) {
+      state.selected = Number(name.split("-")[1]);
+      if (name.startsWith("view-")) state.pane = "results";
+      else { send("为什么这个结果是这样？"); state.pane = "chat"; }
+    }
+    render();
+    if (name.startsWith("view-")) document.querySelector(".card.selected")?.scrollIntoView({block:"nearest"});
+  });
+  document.addEventListener("change", event => {
+    if (event.target.id === "verify") document.querySelector('[data-action="submit-formal"]').disabled = !event.target.checked;
+  });
+  document.addEventListener("submit", event => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    if (event.target.id === "chat") send(data.get("message"));
+    if (event.target.id === "edit") changeDraft({hours:Number(data.get("hours")),city:data.get("city")});
+    render();
+    if (event.target.id === "chat") app.querySelector('[name="message"]')?.focus();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.target.closest?.("input,textarea,[contenteditable]")) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      switchVariant(event.key === "ArrowRight" ? 1 : -1);
+    }
+  });
+  if (new URL(location.href).searchParams.get("demo") === "1") {
+    send(example);
+    choose();
+    addResult("formal");
+    send("工时看错了，其实是 6200 小时。");
+    addResult("trial");
+  }
+  render();
+</script>
+</body>
+</html>
